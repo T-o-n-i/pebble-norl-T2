@@ -3,12 +3,18 @@
 
 // Norl für die Pebble Time 2: große Stundenziffer, darunter eine Skala für die Minuten.
 // Schütteln zeigt für ein paar Sekunden Uhrzeit mit Sekunden und Datum in groß.
+// Bei niedrigem Akku wird die Skala kürzer, rechts daneben steht der Ladezustand als Feld.
 
 #define SETTINGS_KEY 1
 
 #define MARGIN       6   // Rand um die Stundenziffer
 #define METER_H     30   // Höhe der Minutenskala
 #define METER_GAP    8   // Abstand zwischen Ziffer und Skala
+#define BATTERY_GAP  6   // Abstand zwischen Skala und Akkuanzeige
+#define BATTERY_PAD  5   // Innenabstand im Akkufeld
+#define ICON_W      12   // Batteriesymbol ohne Pol
+#define ICON_H      18
+#define ICON_GAP     4   // Abstand zwischen Symbol und Zahl
 
 typedef enum {
   HOUR_MODE_WATCH = 0,  // wie in der Uhr eingestellt
@@ -22,6 +28,9 @@ typedef struct {
   GColor accent;   // Minutenskala, Sekunden und Datum
   uint8_t hour_mode;
   uint8_t detail_seconds;
+  uint8_t battery_threshold;  // Akkustand anzeigen ab diesem Wert in %
+  GColor battery;             // Hintergrund des Akkufelds
+  bool battery_show;          // Akkuanzeige eingeschaltet
 } Settings;
 
 static Settings s_settings;
@@ -30,6 +39,7 @@ static Window *s_window;
 static Layer *s_canvas;
 static AppTimer *s_detail_timer;
 static bool s_detail;
+static BatteryChargeState s_battery;
 
 static const char *const WEEKDAYS[] = {
   "Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"
@@ -47,6 +57,9 @@ static void settings_defaults(void) {
   s_settings.accent = GColorWhite;
   s_settings.hour_mode = HOUR_MODE_WATCH;
   s_settings.detail_seconds = 10;
+  s_settings.battery_threshold = 20;
+  s_settings.battery = GColorWhite;
+  s_settings.battery_show = true;
 }
 
 static void settings_load(void) {
@@ -134,11 +147,64 @@ static void draw_hour(GContext *ctx, GRect area, int hour) {
   glyph_draw_text(ctx, origin, text, &st, s_settings.digits, s_settings.background);
 }
 
+static bool battery_low(void) {
+  return s_settings.battery_show && !s_battery.is_charging &&
+         s_battery.charge_percent <= s_settings.battery_threshold;
+}
+
+// Senkrechtes Batteriesymbol, innen gefüllt je nach Ladezustand
+static void draw_battery_icon(GContext *ctx, GRect r, int percent, GColor c) {
+  graphics_context_set_fill_color(ctx, c);
+  graphics_fill_rect(ctx, GRect(r.origin.x + 3, r.origin.y, r.size.w - 6, 2), 0, GCornerNone);
+  GRect body = GRect(r.origin.x, r.origin.y + 2, r.size.w, r.size.h - 2);
+  graphics_context_set_stroke_color(ctx, c);
+  graphics_context_set_stroke_width(ctx, 2);
+  graphics_draw_round_rect(ctx, GRect(body.origin.x + 1, body.origin.y + 1,
+                                      body.size.w - 2, body.size.h - 2), 2);
+  int16_t inner = body.size.h - 8;
+  int16_t level = (inner * percent + 99) / 100;
+  graphics_fill_rect(ctx, GRect(body.origin.x + 4, body.origin.y + 4 + inner - level,
+                                body.size.w - 8, level), 0, GCornerNone);
+}
+
+// Akkufeld unten rechts: Symbol und Zahl in Hintergrundfarbe auf farbigem Feld.
+// Gibt die Breite des Felds zurück.
+static int16_t draw_battery(GContext *ctx, GRect b) {
+  GFont font = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
+  // Platz für zwei Ziffern reservieren, damit die Skala nicht springt
+  int16_t num_w = graphics_text_layout_get_content_size("00", font, GRect(0, 0, 100, 40),
+                                                        GTextOverflowModeWordWrap,
+                                                        GTextAlignmentLeft).w;
+  int16_t w = BATTERY_PAD + ICON_W + ICON_GAP + num_w + BATTERY_PAD;
+  GRect box = GRect(b.size.w - w, b.size.h - METER_H, w, METER_H);
+  graphics_context_set_fill_color(ctx, s_settings.battery);
+  graphics_fill_rect(ctx, box, 4, GCornerTopLeft | GCornerTopRight);
+
+  char text[4];
+  snprintf(text, sizeof(text), "%d", s_battery.charge_percent);
+  int16_t tw = graphics_text_layout_get_content_size(text, font, GRect(0, 0, 100, 40),
+                                                     GTextOverflowModeWordWrap,
+                                                     GTextAlignmentLeft).w;
+  // Symbol und Zahl gemeinsam mittig im Feld
+  int16_t x = box.origin.x + (w - (ICON_W + ICON_GAP + tw)) / 2;
+  int16_t icon_h = ICON_H + 2;
+  draw_battery_icon(ctx, GRect(x, box.origin.y + (METER_H - icon_h) / 2, ICON_W, icon_h),
+                    s_battery.charge_percent, s_settings.background);
+  graphics_context_set_text_color(ctx, s_settings.background);
+  graphics_draw_text(ctx, text, font, GRect(x + ICON_W + ICON_GAP, box.origin.y - 3, tw + 4, METER_H + 3),
+                     GTextOverflowModeFill, GTextAlignmentLeft, NULL);
+  return w;
+}
+
 static void draw_face(GContext *ctx, GRect b, const struct tm *t) {
   GRect meter = GRect(b.origin.x, b.size.h - METER_H, b.size.w, METER_H);
   GRect digit = GRect(MARGIN, MARGIN, b.size.w - 2 * MARGIN,
                       b.size.h - METER_H - METER_GAP - MARGIN);
   draw_hour(ctx, digit, display_hour(t));
+
+  if (battery_low()) {
+    meter.size.w -= draw_battery(ctx, b) + BATTERY_GAP;
+  }
   draw_meter(ctx, meter, t->tm_min);
 }
 
@@ -210,6 +276,11 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   layer_mark_dirty(s_canvas);
 }
 
+static void battery_handler(BatteryChargeState state) {
+  s_battery = state;
+  layer_mark_dirty(s_canvas);
+}
+
 static void detail_hide(void *data) {
   s_detail_timer = NULL;
   s_detail = false;
@@ -268,6 +339,15 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
     uint8_t secs = tuple_uint(t);
     s_settings.detail_seconds = secs > 0 ? secs : 10;
   }
+  if ((t = dict_find(iter, MESSAGE_KEY_BATTERY))) {
+    s_settings.battery = GColorFromHEX(t->value->int32);
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_BATTERY_SHOW))) {
+    s_settings.battery_show = tuple_uint(t) != 0;
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_BATTERY_THRESHOLD))) {
+    s_settings.battery_threshold = tuple_uint(t);
+  }
   settings_save();
   window_set_background_color(s_window, s_settings.background);
   layer_mark_dirty(s_canvas);
@@ -299,6 +379,8 @@ static void init(void) {
 
   tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
   accel_tap_service_subscribe(tap_handler);
+  s_battery = battery_state_service_peek();
+  battery_state_service_subscribe(battery_handler);
 
   app_message_register_inbox_received(inbox_received);
   app_message_open(128, 64);
@@ -309,6 +391,7 @@ static void deinit(void) {
     app_timer_cancel(s_detail_timer);
   }
   accel_tap_service_unsubscribe();
+  battery_state_service_unsubscribe();
   tick_timer_service_unsubscribe();
   window_destroy(s_window);
 }

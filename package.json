@@ -28,7 +28,10 @@
       "DIGITS",
       "ACCENT",
       "HOUR_MODE",
-      "DETAIL_SECONDS"
+      "DETAIL_SECONDS",
+      "BATTERY_THRESHOLD",
+      "BATTERY",
+      "BATTERY_SHOW"
     ],
     "resources": {
       "media": [

@@ -6,7 +6,7 @@ Nachbau von [Norl](https://apps.repebble.com/norl_545cbf8d8d7292ab7a000044) (Mat
 
 Plattform: emery (Pebble Time 2).
 
-![Watchface](screenshots/face.png) ![Nach dem Schütteln](screenshots/detail.png) ![Mit eigenen Farben](screenshots/farben.png) ![Detailanzeige mit eigenen Farben](screenshots/farben-detail.png)
+![Watchface](screenshots/face.png) ![Nach dem Schütteln](screenshots/detail.png) ![Mit eigenen Farben](screenshots/farben.png) ![Detailanzeige mit eigenen Farben](screenshots/farben-detail.png) ![Bei niedrigem Akku](screenshots/akku.png)
 
 ## Installieren
 
@@ -15,6 +15,7 @@ Plattform: emery (Pebble Time 2).
 ## Bedienung
 
 * **Normalansicht:** Die Stunde füllt den Bildschirm, die Skala unten zeigt die Minuten. Striche alle 5 Minuten, längere bei 15 und 45, der längste bei 30.
+* **Niedriger Akku:** Wenn eingeschaltet, ab dem eingestellten Wert (Standard 20 %) wird die Skala kürzer, rechts daneben steht ein farbiges Feld mit Batteriesymbol und dem Ladezustand in Prozent. Beim Laden ist die Anzeige ausgeblendet.
 * **Schütteln** (kurz das Handgelenk drehen): Stunden und Minuten, darunter die Sekunden, unten Wochentag und Datum. Nach der eingestellten Zeit geht es zurück, nochmal schütteln schließt sofort.
 
 ## Einstellungen
@@ -28,6 +29,9 @@ In der Pebble-App auf dem iPhone beim Watchface auf das Zahnrad tippen.
 | Minutenskala, Sekunden und Datum | Weiß | |
 | Stunden | wie in der Uhr eingestellt | 12 oder 24 Stunden |
 | Detailanzeige nach dem Schütteln | 10 Sekunden | 5, 10, 15 oder 30 Sekunden |
+| Akkustand anzeigen | an | Schalter für die ganze Akkuanzeige |
+| Anzeigen | bei 20 % und weniger | bei 10, 15, 20, 25, 30, 40 oder 50 % und weniger |
+| Farbe des Felds | Weiß | Feld hinter Symbol und Zahl, die in der Hintergrundfarbe stehen |
 
 ## Technik
 
@@ -42,4 +46,5 @@ In der Pebble-App auf dem iPhone beim Watchface auf das Zahnrad tippen.
 pebble build
 pebble install --emulator emery
 pebble emu-tap --emulator emery   # Schütteln simulieren
+pebble emu-battery --emulator emery --percent 20   # niedrigen Akku simulieren
 ```

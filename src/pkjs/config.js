@@ -67,6 +67,44 @@ module.exports = [
     ]
   },
   {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Akkuanzeige"
+      },
+      {
+        "type": "toggle",
+        "messageKey": "BATTERY_SHOW",
+        "label": "Akkustand anzeigen",
+        "description": "Bei niedrigem Akku wird die Minutenskala kürzer, rechts daneben steht ein Feld mit Batteriesymbol und Ladezustand in Prozent. Beim Laden ist es ausgeblendet.",
+        "defaultValue": true
+      },
+      {
+        "type": "select",
+        "messageKey": "BATTERY_THRESHOLD",
+        "label": "Anzeigen",
+        "defaultValue": "20",
+        "options": [
+          { "label": "Bei 10 % und weniger", "value": "10" },
+          { "label": "Bei 15 % und weniger", "value": "15" },
+          { "label": "Bei 20 % und weniger", "value": "20" },
+          { "label": "Bei 25 % und weniger", "value": "25" },
+          { "label": "Bei 30 % und weniger", "value": "30" },
+          { "label": "Bei 40 % und weniger", "value": "40" },
+          { "label": "Bei 50 % und weniger", "value": "50" }
+        ]
+      },
+      {
+        "type": "color",
+        "messageKey": "BATTERY",
+        "defaultValue": "0xFFFFFF",
+        "label": "Farbe des Felds",
+        "description": "Symbol und Zahl stehen in der Hintergrundfarbe."
+      }
+    ]
+  },
+  {
     "type": "submit",
     "defaultValue": "Speichern"
   }
