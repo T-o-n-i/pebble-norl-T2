@@ -31,7 +31,8 @@
       "DETAIL_SECONDS",
       "BATTERY_THRESHOLD",
       "BATTERY",
-      "BATTERY_SHOW"
+      "BATTERY_SHOW",
+      "DETAIL_TRIGGER"
     ],
     "resources": {
       "media": [

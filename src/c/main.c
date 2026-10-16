@@ -2,7 +2,8 @@
 #include "glyphs.h"
 
 // Norl für die Pebble Time 2: große Stundenziffer, darunter eine Skala für die Minuten.
-// Schütteln zeigt für ein paar Sekunden Uhrzeit mit Sekunden und Datum in groß.
+// Schütteln oder Antippen (erkannt am Einschalten des Lichts) zeigt für ein paar Sekunden
+// Uhrzeit mit Sekunden und Datum in groß.
 // Bei niedrigem Akku wird die Skala kürzer, rechts daneben steht der Ladezustand als Feld.
 
 #define SETTINGS_KEY 1
@@ -10,6 +11,8 @@
 #define MARGIN       6   // Rand um die Stundenziffer
 #define METER_H     30   // Höhe der Minutenskala
 #define METER_GAP    8   // Abstand zwischen Ziffer und Skala
+#define TRIGGER_PAUSE_MS 1000  // Schütteln und Licht kommen oft zusammen, nur das erste zählt
+#define LIGHT_DELAY_MS    300  // nach Licht an kurz warten, ob ein Knopf ein Menü öffnet
 #define BATTERY_GAP  6   // Abstand zwischen Skala und Akkuanzeige
 #define BATTERY_PAD  5   // Innenabstand im Akkufeld
 #define ICON_W      12   // Batteriesymbol ohne Pol
@@ -22,6 +25,12 @@ typedef enum {
   HOUR_MODE_24 = 2,
 } HourMode;
 
+typedef enum {
+  TRIGGER_SHAKE = 0,  // nur Schütteln
+  TRIGGER_LIGHT = 1,  // nur Licht an (Antippen, Knopf, Handgelenk drehen)
+  TRIGGER_BOTH = 2,
+} DetailTrigger;
+
 typedef struct {
   GColor background;
   GColor digits;   // Stundenziffer und Uhrzeit in der Detailanzeige
@@ -31,6 +40,7 @@ typedef struct {
   uint8_t battery_threshold;  // Akkustand anzeigen ab diesem Wert in %
   GColor battery;             // Hintergrund des Akkufelds
   bool battery_show;          // Akkuanzeige eingeschaltet
+  uint8_t detail_trigger;     // DetailTrigger
 } Settings;
 
 static Settings s_settings;
@@ -38,7 +48,9 @@ static Settings s_settings;
 static Window *s_window;
 static Layer *s_canvas;
 static AppTimer *s_detail_timer;
+static AppTimer *s_light_timer;
 static bool s_detail;
+static uint32_t s_last_trigger_ms;
 static BatteryChargeState s_battery;
 
 static const char *const WEEKDAYS[] = {
@@ -60,6 +72,7 @@ static void settings_defaults(void) {
   s_settings.battery_threshold = 20;
   s_settings.battery = GColorWhite;
   s_settings.battery_show = true;
+  s_settings.detail_trigger = TRIGGER_BOTH;
 }
 
 static void settings_load(void) {
@@ -301,7 +314,54 @@ static void detail_show(void) {
   layer_mark_dirty(s_canvas);
 }
 
+static uint32_t now_ms(void) {
+  time_t sec;
+  uint16_t ms;
+  time_ms(&sec, &ms);
+  return (uint32_t)sec * 1000 + ms;
+}
+
+// true, wenn gerade schon ein anderer Auslöser gewirkt hat. Beim Drehen des Handgelenks
+// kommen Schütteln und Licht fast gleichzeitig, sonst würde das zweite die Anzeige gleich
+// wieder schließen oder öffnen.
+static bool trigger_too_soon(void) {
+  uint32_t ms = now_ms();
+  if (s_last_trigger_ms && ms - s_last_trigger_ms < TRIGGER_PAUSE_MS) {
+    return true;
+  }
+  s_last_trigger_ms = ms;
+  return false;
+}
+
+static void light_timer_cancel(void) {
+  if (s_light_timer) {
+    app_timer_cancel(s_light_timer);
+    s_light_timer = NULL;
+  }
+}
+
+static void light_delayed(void *data) {
+  s_light_timer = NULL;
+  detail_show();
+}
+
+// Licht an öffnet die Detailanzeige oder verlängert sie, schließt sie aber nie.
+// Ein Knopfdruck schaltet das Licht ein, bevor das Menü aufgeht. Deshalb erst kurz warten:
+// Wird das Watchface in der Zeit beendet oder verdeckt, blitzt die Detailanzeige nicht auf.
+static void backlight_handler(bool on) {
+  if (!on || trigger_too_soon()) return;
+  light_timer_cancel();
+  s_light_timer = app_timer_register(LIGHT_DELAY_MS, light_delayed, NULL);
+}
+
+static void focus_will_change(bool in_focus) {
+  if (!in_focus) {
+    light_timer_cancel();
+  }
+}
+
 static void tap_handler(AccelAxisType axis, int32_t direction) {
+  if (trigger_too_soon()) return;
   if (s_detail) {
     if (s_detail_timer) {
       app_timer_cancel(s_detail_timer);
@@ -309,6 +369,17 @@ static void tap_handler(AccelAxisType axis, int32_t direction) {
     detail_hide(NULL);
   } else {
     detail_show();
+  }
+}
+
+static void triggers_subscribe(void) {
+  accel_tap_service_unsubscribe();
+  backlight_service_unsubscribe();
+  if (s_settings.detail_trigger != TRIGGER_LIGHT) {
+    accel_tap_service_subscribe(tap_handler);
+  }
+  if (s_settings.detail_trigger != TRIGGER_SHAKE) {
+    backlight_service_subscribe(backlight_handler);
   }
 }
 
@@ -339,6 +410,9 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
     uint8_t secs = tuple_uint(t);
     s_settings.detail_seconds = secs > 0 ? secs : 10;
   }
+  if ((t = dict_find(iter, MESSAGE_KEY_DETAIL_TRIGGER))) {
+    s_settings.detail_trigger = tuple_uint(t);
+  }
   if ((t = dict_find(iter, MESSAGE_KEY_BATTERY))) {
     s_settings.battery = GColorFromHEX(t->value->int32);
   }
@@ -349,6 +423,7 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
     s_settings.battery_threshold = tuple_uint(t);
   }
   settings_save();
+  triggers_subscribe();
   window_set_background_color(s_window, s_settings.background);
   layer_mark_dirty(s_canvas);
 }
@@ -378,19 +453,25 @@ static void init(void) {
   window_stack_push(s_window, true);
 
   tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
-  accel_tap_service_subscribe(tap_handler);
+  triggers_subscribe();
+  app_focus_service_subscribe_handlers((AppFocusHandlers) {
+    .will_focus = focus_will_change,
+  });
   s_battery = battery_state_service_peek();
   battery_state_service_subscribe(battery_handler);
 
   app_message_register_inbox_received(inbox_received);
-  app_message_open(128, 64);
+  app_message_open(256, 64);
 }
 
 static void deinit(void) {
   if (s_detail_timer) {
     app_timer_cancel(s_detail_timer);
   }
+  light_timer_cancel();
+  app_focus_service_unsubscribe();
   accel_tap_service_unsubscribe();
+  backlight_service_unsubscribe();
   battery_state_service_unsubscribe();
   tick_timer_service_unsubscribe();
   window_destroy(s_window);

@@ -1,12 +1,12 @@
 # Norl T2
 
-Watchface für die Pebble Time 2: eine große Stundenziffer, darunter eine Skala, die sich mit den Minuten füllt. Schütteln zeigt für ein paar Sekunden die genaue Uhrzeit mit Sekunden und das Datum, groß genug zum Ablesen ohne Brille.
+Watchface für die Pebble Time 2: eine große Stundenziffer, darunter eine Skala, die sich mit den Minuten füllt. Schütteln oder Antippen zeigt für ein paar Sekunden die genaue Uhrzeit mit Sekunden und das Datum, groß genug zum Ablesen ohne Brille.
 
 Nachbau von [Norl](https://apps.repebble.com/norl_545cbf8d8d7292ab7a000044) (Matteo Piccina, ursprünglich von Jose Fos, 2014). Das Original ist für 144 × 168 Pixel gebaut und läuft auf der Time 2 nur hochskaliert. Hier sind die Ziffern als Vektoren neu gezeichnet, in voller Auflösung und in frei wählbaren Farben.
 
 Plattform: emery (Pebble Time 2).
 
-![Watchface](screenshots/face.png) ![Nach dem Schütteln](screenshots/detail.png) ![Mit eigenen Farben](screenshots/farben.png) ![Detailanzeige mit eigenen Farben](screenshots/farben-detail.png) ![Bei niedrigem Akku](screenshots/akku.png)
+![Watchface](screenshots/face.png) ![Detailanzeige](screenshots/detail.png) ![Mit eigenen Farben](screenshots/farben.png) ![Detailanzeige mit eigenen Farben](screenshots/farben-detail.png) ![Bei niedrigem Akku](screenshots/akku.png)
 
 ## Installieren
 
@@ -16,7 +16,8 @@ Plattform: emery (Pebble Time 2).
 
 * **Normalansicht:** Die Stunde füllt den Bildschirm, die Skala unten zeigt die Minuten. Striche alle 5 Minuten, längere bei 15 und 45, der längste bei 30.
 * **Niedriger Akku:** Wenn eingeschaltet, ab dem eingestellten Wert (Standard 20 %) wird die Skala kürzer, rechts daneben steht ein farbiges Feld mit Batteriesymbol und dem Ladezustand in Prozent. Beim Laden ist die Anzeige ausgeblendet.
-* **Schütteln** (kurz das Handgelenk drehen): Stunden und Minuten, darunter die Sekunden, unten Wochentag und Datum. Nach der eingestellten Zeit geht es zurück, nochmal schütteln schließt sofort.
+* **Detailanzeige** durch Schütteln (kurz das Handgelenk drehen) oder Antippen: Stunden und Minuten, darunter die Sekunden, unten Wochentag und Datum. Nach der eingestellten Zeit geht es zurück, nochmal schütteln schließt sofort.
+* **Antippen** erkennt das Watchface daran, dass das Licht angeht. Touch selbst bekommen Watchfaces auf der Pebble nicht. Deshalb öffnet auch jeder Knopfdruck die Detailanzeige, und Doppeltippen ist nicht möglich. Das Licht öffnet die Anzeige nur, es schließt sie nie. Sie erscheint erst 0,3 Sekunden nach dem Licht, damit sie nicht kurz aufblitzt, wenn ein Knopfdruck ein Menü öffnet. Kommen Schütteln und Licht innerhalb einer Sekunde, zählt nur das erste.
 
 ## Einstellungen
 
@@ -28,7 +29,8 @@ In der Pebble-App auf dem iPhone beim Watchface auf das Zahnrad tippen.
 | Ziffern | Weiß | Stundenziffer und Uhrzeit in der Detailanzeige |
 | Minutenskala, Sekunden und Datum | Weiß | |
 | Stunden | wie in der Uhr eingestellt | 12 oder 24 Stunden |
-| Detailanzeige nach dem Schütteln | 10 Sekunden | 5, 10, 15 oder 30 Sekunden |
+| Detailanzeige öffnen | Schütteln und Antippen | Schütteln, Antippen oder beides |
+| Detailanzeige stehen lassen | 10 Sekunden | 5, 10, 15 oder 30 Sekunden |
 | Akkustand anzeigen | an | Schalter für die ganze Akkuanzeige |
 | Anzeigen | bei 20 % und weniger | bei 10, 15, 20, 25, 30, 40 oder 50 % und weniger |
 | Farbe des Felds | Weiß | Feld hinter Symbol und Zahl, die in der Hintergrundfarbe stehen |
@@ -46,5 +48,6 @@ In der Pebble-App auf dem iPhone beim Watchface auf das Zahnrad tippen.
 pebble build
 pebble install --emulator emery
 pebble emu-tap --emulator emery   # Schütteln simulieren
+pebble emu-button --emulator emery click back   # Licht an, wie beim Antippen
 pebble emu-battery --emulator emery --percent 20   # niedrigen Akku simulieren
 ```

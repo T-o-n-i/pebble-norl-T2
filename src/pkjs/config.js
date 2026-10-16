@@ -5,7 +5,7 @@ module.exports = [
   },
   {
     "type": "text",
-    "defaultValue": "Große Stundenziffer, darunter eine Skala für die Minuten. Schütteln zeigt die genaue Uhrzeit mit Sekunden und das Datum."
+    "defaultValue": "Große Stundenziffer, darunter eine Skala für die Minuten. Schütteln oder Antippen zeigt die genaue Uhrzeit mit Sekunden und das Datum."
   },
   {
     "type": "section",
@@ -54,8 +54,20 @@ module.exports = [
       },
       {
         "type": "select",
+        "messageKey": "DETAIL_TRIGGER",
+        "label": "Detailanzeige öffnen",
+        "description": "Antippen erkennt das Watchface daran, dass das Licht angeht. Das Licht geht auch bei jedem Knopfdruck und beim Drehen des Handgelenks an.",
+        "defaultValue": "2",
+        "options": [
+          { "label": "Schütteln", "value": "0" },
+          { "label": "Antippen", "value": "1" },
+          { "label": "Schütteln und Antippen", "value": "2" }
+        ]
+      },
+      {
+        "type": "select",
         "messageKey": "DETAIL_SECONDS",
-        "label": "Detailanzeige nach dem Schütteln",
+        "label": "Detailanzeige stehen lassen",
         "defaultValue": "10",
         "options": [
           { "label": "5 Sekunden", "value": "5" },
