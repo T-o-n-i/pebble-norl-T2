@@ -17,7 +17,7 @@ Plattform: emery (Pebble Time 2).
 * **Normalansicht:** Die Stunde füllt den Bildschirm, die Skala unten zeigt die Minuten. Striche alle 5 Minuten, längere bei 15 und 45, der längste bei 30.
 * **Niedriger Akku:** Wenn eingeschaltet, ab dem eingestellten Wert (Standard 20 %) wird die Skala kürzer, rechts daneben steht ein farbiges Feld mit Batteriesymbol und dem Ladezustand in Prozent. Beim Laden ist die Anzeige ausgeblendet.
 * **Detailanzeige** durch Schütteln (kurz das Handgelenk drehen) oder Antippen: Stunden und Minuten, darunter die Sekunden, unten Wochentag und Datum. Nach der eingestellten Zeit geht es zurück, nochmal schütteln schließt sofort.
-* **Antippen** erkennt das Watchface daran, dass das Licht angeht. Touch selbst bekommen Watchfaces auf der Pebble nicht. Deshalb öffnet auch jeder Knopfdruck die Detailanzeige, und Doppeltippen ist nicht möglich. Das Licht öffnet die Anzeige nur, es schließt sie nie. Sie erscheint erst 0,3 Sekunden nach dem Licht, damit sie nicht kurz aufblitzt, wenn ein Knopfdruck ein Menü öffnet. Kommen Schütteln und Licht innerhalb einer Sekunde, zählt nur das erste.
+* **Antippen** erkennt das Watchface daran, dass das Licht angeht. Touch selbst bekommen Watchfaces auf der Pebble nicht. Deshalb öffnet auch jeder Knopfdruck die Detailanzeige, und Doppeltippen ist nicht möglich. Das Licht öffnet die Anzeige nur, es schließt sie nie. Sie erscheint erst 50 Millisekunden nach dem Licht, damit sie nicht kurz aufblitzt, wenn ein Knopfdruck ein Menü öffnet. Kommen Schütteln und Licht innerhalb einer Sekunde, zählt nur das erste.
 
 ## Einstellungen
 

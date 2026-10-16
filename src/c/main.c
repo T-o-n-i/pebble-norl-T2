@@ -12,7 +12,7 @@
 #define METER_H     30   // Höhe der Minutenskala
 #define METER_GAP    8   // Abstand zwischen Ziffer und Skala
 #define TRIGGER_PAUSE_MS 1000  // Schütteln und Licht kommen oft zusammen, nur das erste zählt
-#define LIGHT_DELAY_MS    300  // nach Licht an kurz warten, ob ein Knopf ein Menü öffnet
+#define LIGHT_DELAY_MS     50  // nach Licht an kurz warten, ob ein Knopf ein Menü öffnet
 #define BATTERY_GAP  6   // Abstand zwischen Skala und Akkuanzeige
 #define BATTERY_PAD  5   // Innenabstand im Akkufeld
 #define ICON_W      12   // Batteriesymbol ohne Pol
