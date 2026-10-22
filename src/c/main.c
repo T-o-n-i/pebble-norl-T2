@@ -3,10 +3,16 @@
 
 // Norl für die Pebble Time 2: große Stundenziffer, darunter eine Skala für die Minuten.
 // Schütteln oder Antippen (erkannt am Einschalten des Lichts) zeigt für ein paar Sekunden
-// Uhrzeit mit Sekunden und Datum in groß.
+// Uhrzeit und Datum in groß, dazwischen die Sekunden oder den Regen der nächsten 12 Stunden.
+// Den Regen holt das Handy stündlich bei Open-Meteo.
 // Bei niedrigem Akku wird die Skala kürzer, rechts daneben steht der Ladezustand als Feld.
 
+// 1 = Detailanzeige mit Testdaten statt Wetter vom Handy, Schütteln schaltet durch Uhrzeiten
+// und Anzeigearten
+#define RAIN_DEMO 0
+
 #define SETTINGS_KEY 1
+#define RAIN_KEY     2
 
 #define MARGIN       6   // Rand um die Stundenziffer
 #define METER_H     30   // Höhe der Minutenskala
@@ -18,6 +24,15 @@
 #define ICON_W      12   // Batteriesymbol ohne Pol
 #define ICON_H      18
 #define ICON_GAP     4   // Abstand zwischen Symbol und Zahl
+#define RAIN_HOURS  12   // die volle Breite sind 12 Stunden, der linke Rand ist jetzt
+#define RAIN_TOP   112   // Oberkante der Regenbalken in der Detailanzeige
+#define RAIN_BAR_H  46   // Höhe der Balken bei 100 % oder voller Menge
+#define RAIN_FULL   40   // Regenmenge in 0,1 mm/h, bei der ein Balken ganz oben ankommt
+#define RAIN_DATA   24   // so viele Stunden schickt das Handy
+#define RAIN_MISSING 255
+#define RAIN_REFRESH (60 * 60)      // Wetter höchstens einmal pro Stunde holen
+#define RAIN_RETRY   (15 * 60)      // ohne Antwort erst nach 15 Minuten wieder fragen
+#define RAIN_STALE   (3 * 60 * 60)  // ältere Daten nicht mehr zeigen
 
 typedef enum {
   HOUR_MODE_WATCH = 0,  // wie in der Uhr eingestellt
@@ -31,6 +46,12 @@ typedef enum {
   TRIGGER_BOTH = 2,
 } DetailTrigger;
 
+typedef enum {
+  RAIN_OFF = 0,          // Detailanzeige zeigt die Sekunden
+  RAIN_PROBABILITY = 1,  // Höhe des Balkens = Regenwahrscheinlichkeit
+  RAIN_AMOUNT = 2,       // Höhe des Balkens = Regenmenge
+} RainMode;
+
 typedef struct {
   GColor background;
   GColor digits;   // Stundenziffer und Uhrzeit in der Detailanzeige
@@ -41,9 +62,23 @@ typedef struct {
   GColor battery;             // Hintergrund des Akkufelds
   bool battery_show;          // Akkuanzeige eingeschaltet
   uint8_t detail_trigger;     // DetailTrigger
+  uint8_t rain_mode;          // RainMode
+  uint8_t rain_min_percent;   // Balken erst ab dieser Wahrscheinlichkeit
+  uint8_t rain_min_tenths;    // Balken erst ab dieser Menge in 0,1 mm/h
+  GColor rain;
 } Settings;
 
+// Regen vom Handy, auf der Uhr gespeichert
+typedef struct {
+  int32_t start;    // Beginn der ersten Stunde (UTC)
+  int32_t fetched;  // wann die Uhr die Daten bekommen hat
+  uint8_t percent[RAIN_DATA];  // Wahrscheinlichkeit in %
+  uint8_t tenths[RAIN_DATA];   // Menge in 0,1 mm/h
+} RainData;
+
 static Settings s_settings;
+static RainData s_rain;
+static time_t s_rain_asked;  // letzte Anfrage ans Handy
 
 static Window *s_window;
 static Layer *s_canvas;
@@ -73,6 +108,10 @@ static void settings_defaults(void) {
   s_settings.battery = GColorWhite;
   s_settings.battery_show = true;
   s_settings.detail_trigger = TRIGGER_BOTH;
+  s_settings.rain_mode = RAIN_PROBABILITY;
+  s_settings.rain_min_percent = 30;
+  s_settings.rain_min_tenths = 1;
+  s_settings.rain = GColorPictonBlue;
 }
 
 static void settings_load(void) {
@@ -86,6 +125,12 @@ static void settings_save(void) {
   persist_write_data(SETTINGS_KEY, &s_settings, sizeof(s_settings));
 }
 
+static void rain_load(void) {
+  if (persist_exists(RAIN_KEY)) {
+    persist_read_data(RAIN_KEY, &s_rain, sizeof(s_rain));
+  }
+}
+
 static bool use_24h(void) {
   switch (s_settings.hour_mode) {
     case HOUR_MODE_12: return false;
@@ -94,12 +139,17 @@ static bool use_24h(void) {
   }
 }
 
-static int display_hour(const struct tm *t) {
+// Stunde 0 bis 23 so, wie sie angezeigt wird
+static int clock_hour(int hour) {
   if (use_24h()) {
-    return t->tm_hour;
+    return hour;
   }
-  int h = t->tm_hour % 12;
+  int h = hour % 12;
   return h == 0 ? 12 : h;
+}
+
+static int display_hour(const struct tm *t) {
+  return clock_hour(t->tm_hour);
 }
 
 // ---------------------------------------------------------------- Zeichnen
@@ -209,6 +259,125 @@ static int16_t draw_battery(GContext *ctx, GRect b) {
   return w;
 }
 
+static int16_t text_width(const char *text, GFont font) {
+  return graphics_text_layout_get_content_size(text, font, GRect(0, 0, 400, 40),
+                                               GTextOverflowModeWordWrap,
+                                               GTextAlignmentLeft).w;
+}
+
+// ---------------------------------------------------------------- Regen
+
+#if RAIN_DEMO
+// Ausgedachter Tag: Regen am Morgen, Gewitter am Nachmittag, Schauer in der Nacht.
+// Je Uhrzeit Wahrscheinlichkeit in % und Menge in 0,1 mm/h für die Stunde ab dann.
+static const uint8_t DEMO_PERCENT[24] = {
+  0, 0, 5, 10, 20, 35, 60, 80, 90, 75, 50, 30, 20, 15, 40, 65, 85, 70, 45, 25, 10, 5, 30, 55
+};
+static const uint8_t DEMO_TENTHS[24] = {
+  0, 0, 0, 0, 0, 1, 3, 8, 15, 6, 2, 1, 0, 0, 1, 4, 25, 10, 2, 0, 0, 0, 1, 3
+};
+static const uint8_t DEMO_HOURS[] = { 1, 4, 4, 4, 8, 13, 17, 20 };
+static const uint8_t DEMO_MINUTES[] = { 35, 0, 20, 40, 35, 10, 50, 35 };
+#define DEMO_COUNT (3 * ARRAY_LENGTH(DEMO_HOURS))
+static int s_demo;  // Stunde und Anzeigeart, Antippen zählt weiter
+#endif
+
+static int isqrt(int n) {
+  int r = 0;
+  while ((r + 1) * (r + 1) <= n) r++;
+  return r;
+}
+
+// Wahrscheinlichkeit und Menge für die Stunde, die i Stunden nach der aktuellen beginnt.
+// false, wenn dafür nichts bekannt ist.
+static bool rain_value(const struct tm *t, int i, int *percent, int *tenths) {
+#if RAIN_DEMO
+  *percent = DEMO_PERCENT[(t->tm_hour + i) % 24];
+  *tenths = DEMO_TENTHS[(t->tm_hour + i) % 24];
+  return true;
+#else
+  time_t now = time(NULL);
+  if (now - s_rain.fetched > RAIN_STALE) return false;
+  time_t hour = now - t->tm_min * 60 - t->tm_sec + i * SECONDS_PER_HOUR;
+  if (hour < s_rain.start) return false;
+  int k = (hour - s_rain.start) / SECONDS_PER_HOUR;
+  if (k >= RAIN_DATA) return false;
+  *percent = s_rain.percent[k];
+  *tenths = s_rain.tenths[k];
+  return true;
+#endif
+}
+
+// Regen statt Sekunden in der Detailanzeige: eingeschaltet und nicht zu alt
+static bool detail_rain(void) {
+  if (s_settings.rain_mode == RAIN_OFF) return false;
+#if RAIN_DEMO
+  return true;
+#else
+  return time(NULL) - s_rain.fetched <= RAIN_STALE;
+#endif
+}
+
+// Höhe des Balkens für die Stunde i, 0 = kein Balken
+static int16_t rain_height(const struct tm *t, int i, int16_t full) {
+  int percent, tenths;
+  if (!rain_value(t, i, &percent, &tenths)) return 0;
+  if (s_settings.rain_mode == RAIN_PROBABILITY) {
+    if (percent == RAIN_MISSING || percent < s_settings.rain_min_percent) return 0;
+    return full * percent / 100;
+  }
+  if (tenths == RAIN_MISSING || tenths < s_settings.rain_min_tenths || tenths == 0) return 0;
+  if (tenths >= RAIN_FULL) return full;
+  // Wurzel, damit auch Nieselregen zu sehen ist: 1 mm/h reicht bis zur halben Höhe
+  int16_t h = isqrt(full * full * tenths / RAIN_FULL);
+  return h < 2 ? 2 : h;
+}
+
+// Regenbalken für die nächsten 12 Stunden, darunter eine Skala mit den vollen Stunden.
+// Der linke Rand ist jetzt, die Balken wandern mit den Minuten nach links: Links wird die
+// laufende Stunde angeschnitten, rechts kommt die dreizehnte herein.
+static void draw_rain(GContext *ctx, GRect r, const struct tm *t) {
+  const int span = RAIN_HOURS * 60;
+  int16_t left = r.origin.x;
+  int16_t right = r.origin.x + r.size.w - 1;
+  int16_t base = r.origin.y + RAIN_BAR_H;  // Unterkante der Balken
+
+  graphics_context_set_fill_color(ctx, s_settings.rain);
+  for (int i = 0; i <= RAIN_HOURS; i++) {
+    int16_t h = rain_height(t, i, RAIN_BAR_H);
+    if (h <= 0) continue;
+    // 2 Pixel Lücke zwischen den Balken, genau über dem Strich der Skala
+    int16_t x0 = left + r.size.w * (i * 60 - t->tm_min) / span + 1;
+    int16_t x1 = left + r.size.w * ((i + 1) * 60 - t->tm_min) / span - 2;
+    if (x0 < left) x0 = left;
+    if (x1 > right) x1 = right;
+    if (x1 < x0) continue;
+    graphics_fill_rect(ctx, GRect(x0, base - h, x1 - x0 + 1, h), 0, GCornerNone);
+  }
+
+  graphics_context_set_fill_color(ctx, s_settings.accent);
+  graphics_fill_rect(ctx, GRect(left, base + 1, r.size.w, 2), 0, GCornerNone);
+
+  // Striche zu jeder vollen Stunde, alle 3 Stunden länger und mit der Uhrzeit
+  GFont font = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
+  graphics_context_set_text_color(ctx, s_settings.accent);
+  for (int i = 0; i <= RAIN_HOURS; i++) {
+    int16_t x = left + r.size.w * (i * 60 - t->tm_min) / span - 1;
+    if (x < left || x + 1 > right) continue;
+    int hour = (t->tm_hour + i) % 24;
+    bool labeled = hour % 3 == 0;
+    graphics_fill_rect(ctx, GRect(x, base + 3, 2, labeled ? 6 : 3), 0, GCornerNone);
+    if (!labeled) continue;
+    char text[4];
+    snprintf(text, sizeof(text), "%d", clock_hour(hour));
+    int16_t tw = text_width(text, font);
+    int16_t tx = x + 1 - tw / 2;
+    if (tx < left || tx + tw > right + 1) continue;
+    graphics_draw_text(ctx, text, font, GRect(tx - 2, base + 4, tw + 4, 22),
+                       GTextOverflowModeFill, GTextAlignmentCenter, NULL);
+  }
+}
+
 static void draw_face(GContext *ctx, GRect b, const struct tm *t) {
   GRect meter = GRect(b.origin.x, b.size.h - METER_H, b.size.w, METER_H);
   GRect digit = GRect(MARGIN, MARGIN, b.size.w - 2 * MARGIN,
@@ -229,12 +398,6 @@ static void draw_centered_text(GContext *ctx, const char *text, GFont font, GRec
 
 static const char *const WEEKDAYS_SHORT[] = { "So", "Mo", "Di", "Mi", "Do", "Fr", "Sa" };
 
-static int16_t text_width(const char *text, GFont font) {
-  return graphics_text_layout_get_content_size(text, font, GRect(0, 0, 400, 40),
-                                               GTextOverflowModeWordWrap,
-                                               GTextAlignmentLeft).w;
-}
-
 // Datumszeile, so ausführlich wie in die Breite passt
 static void format_date(char *buf, size_t len, const struct tm *t, GFont font, int16_t max_w) {
   snprintf(buf, len, "%s, %d. %s", WEEKDAYS[t->tm_wday], t->tm_mday, MONTHS[t->tm_mon]);
@@ -254,13 +417,17 @@ static void draw_detail(GContext *ctx, GRect b, const struct tm *t) {
   glyph_draw_text(ctx, GPoint((b.size.w - tw) / 2, 6), hm, &big, s_settings.digits,
                   s_settings.background);
 
-  char ss[4];
-  snprintf(ss, sizeof(ss), "%02d", t->tm_sec);
-  GlyphStyle mid = { .height = 68, .width = 42, .gap = 10, .narrow_one = true };
-  mid.stroke = glyph_stroke_for(mid.height, mid.width);
-  tw = glyph_text_width(ss, &mid);
-  glyph_draw_text(ctx, GPoint((b.size.w - tw) / 2, 118), ss, &mid, s_settings.accent,
-                  s_settings.background);
+  if (detail_rain()) {
+    draw_rain(ctx, GRect(MARGIN, RAIN_TOP, b.size.w - 2 * MARGIN, b.size.h - RAIN_TOP), t);
+  } else {
+    char ss[4];
+    snprintf(ss, sizeof(ss), "%02d", t->tm_sec);
+    GlyphStyle mid = { .height = 68, .width = 42, .gap = 10, .narrow_one = true };
+    mid.stroke = glyph_stroke_for(mid.height, mid.width);
+    tw = glyph_text_width(ss, &mid);
+    glyph_draw_text(ctx, GPoint((b.size.w - tw) / 2, 118), ss, &mid, s_settings.accent,
+                    s_settings.background);
+  }
 
   GFont font = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
   char date[32];
@@ -276,6 +443,16 @@ static void canvas_update(Layer *layer, GContext *ctx) {
 
   time_t now = time(NULL);
   struct tm *t = localtime(&now);
+#if RAIN_DEMO
+  struct tm demo = *t;
+  demo.tm_hour = DEMO_HOURS[s_demo % ARRAY_LENGTH(DEMO_HOURS)];
+  demo.tm_min = DEMO_MINUTES[s_demo % ARRAY_LENGTH(DEMO_HOURS)];
+  int kind = s_demo / ARRAY_LENGTH(DEMO_HOURS);
+  s_settings.hour_mode = kind == 2 ? HOUR_MODE_12 : HOUR_MODE_24;
+  s_settings.rain_mode = kind == 1 ? RAIN_AMOUNT : RAIN_PROBABILITY;
+  s_detail = true;
+  t = &demo;
+#endif
   if (s_detail) {
     draw_detail(ctx, b, t);
   } else {
@@ -283,9 +460,52 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   }
 }
 
+// ---------------------------------------------------------------- Wetter vom Handy
+
+// Fragt das Handy nach neuem Regen, wenn die Daten älter als eine Stunde sind.
+// Ohne Verbindung zum Handy passiert nichts, beim Wiederverbinden wird gleich gefragt.
+static void rain_request(void) {
+  if (RAIN_DEMO || s_settings.rain_mode == RAIN_OFF) return;
+  time_t now = time(NULL);
+  if (now - s_rain.fetched < RAIN_REFRESH) return;
+  if (s_rain_asked && now - s_rain_asked < RAIN_RETRY) return;
+  if (!connection_service_peek_pebble_app_connection()) return;
+  DictionaryIterator *iter;
+  if (app_message_outbox_begin(&iter) != APP_MSG_OK) return;
+  dict_write_uint8(iter, MESSAGE_KEY_RAIN_REQUEST, 1);
+  if (app_message_outbox_send() == APP_MSG_OK) {
+    s_rain_asked = now;
+  }
+}
+
+static void rain_received(DictionaryIterator *iter) {
+  Tuple *start = dict_find(iter, MESSAGE_KEY_RAIN_START);
+  Tuple *percent = dict_find(iter, MESSAGE_KEY_RAIN_PERCENT);
+  Tuple *tenths = dict_find(iter, MESSAGE_KEY_RAIN_TENTHS);
+  if (!start || !percent || !tenths) return;
+  memset(s_rain.percent, RAIN_MISSING, RAIN_DATA);
+  memset(s_rain.tenths, RAIN_MISSING, RAIN_DATA);
+  memcpy(s_rain.percent, percent->value->data, percent->length < RAIN_DATA ? percent->length : RAIN_DATA);
+  memcpy(s_rain.tenths, tenths->value->data, tenths->length < RAIN_DATA ? tenths->length : RAIN_DATA);
+  s_rain.start = start->value->int32;
+  s_rain.fetched = time(NULL);
+  persist_write_data(RAIN_KEY, &s_rain, sizeof(s_rain));
+  layer_mark_dirty(s_canvas);
+}
+
+static void connection_handler(bool connected) {
+  if (connected) {
+    s_rain_asked = 0;
+    rain_request();
+  }
+}
+
 // ---------------------------------------------------------------- Zeit und Schütteln
 
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
+  if (units_changed & MINUTE_UNIT) {
+    rain_request();
+  }
   layer_mark_dirty(s_canvas);
 }
 
@@ -303,8 +523,8 @@ static void detail_hide(void *data) {
 
 static void detail_show(void) {
   s_detail = true;
-  // Sekunden laufen nur, solange die Detailanzeige zu sehen ist
-  tick_timer_service_subscribe(SECOND_UNIT, tick_handler);
+  // Sekunden laufen nur, solange die Detailanzeige sie zeigt
+  tick_timer_service_subscribe(detail_rain() ? MINUTE_UNIT : SECOND_UNIT, tick_handler);
   uint32_t ms = (uint32_t)s_settings.detail_seconds * 1000;
   if (s_detail_timer) {
     app_timer_reschedule(s_detail_timer, ms);
@@ -361,6 +581,11 @@ static void focus_will_change(bool in_focus) {
 }
 
 static void tap_handler(AccelAxisType axis, int32_t direction) {
+#if RAIN_DEMO
+  s_demo = (s_demo + 1) % DEMO_COUNT;
+  layer_mark_dirty(s_canvas);
+  return;
+#endif
   if (trigger_too_soon()) return;
   if (s_detail) {
     if (s_detail_timer) {
@@ -392,7 +617,7 @@ static uint8_t tuple_uint(const Tuple *t) {
   return (uint8_t)t->value->int32;
 }
 
-static void inbox_received(DictionaryIterator *iter, void *context) {
+static void settings_received(DictionaryIterator *iter) {
   Tuple *t;
   if ((t = dict_find(iter, MESSAGE_KEY_BACKGROUND))) {
     s_settings.background = GColorFromHEX(t->value->int32);
@@ -422,10 +647,38 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, MESSAGE_KEY_BATTERY_THRESHOLD))) {
     s_settings.battery_threshold = tuple_uint(t);
   }
+  if ((t = dict_find(iter, MESSAGE_KEY_RAIN_MODE))) {
+    s_settings.rain_mode = tuple_uint(t);
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_RAIN_MIN_PERCENT))) {
+    s_settings.rain_min_percent = tuple_uint(t);
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_RAIN_MIN_TENTHS))) {
+    s_settings.rain_min_tenths = tuple_uint(t);
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_RAIN))) {
+    s_settings.rain = GColorFromHEX(t->value->int32);
+  }
   settings_save();
   triggers_subscribe();
   window_set_background_color(s_window, s_settings.background);
   layer_mark_dirty(s_canvas);
+  rain_request();  // falls der Regen gerade eingeschaltet wurde
+}
+
+// Vom Handy kommen Einstellungen (Clay schickt immer alle Felder), Regen
+// oder die Meldung, dass das Handy-Skript bereit ist.
+static void inbox_received(DictionaryIterator *iter, void *context) {
+  if (dict_find(iter, MESSAGE_KEY_BACKGROUND)) {
+    settings_received(iter);
+  }
+  if (dict_find(iter, MESSAGE_KEY_RAIN_START)) {
+    rain_received(iter);
+  }
+  if (dict_find(iter, MESSAGE_KEY_RAIN_READY)) {
+    s_rain_asked = 0;
+    rain_request();
+  }
 }
 
 // ---------------------------------------------------------------- Fenster und App
@@ -443,6 +696,7 @@ static void window_unload(Window *window) {
 
 static void init(void) {
   settings_load();
+  rain_load();
 
   s_window = window_create();
   window_set_background_color(s_window, s_settings.background);
@@ -459,6 +713,9 @@ static void init(void) {
   });
   s_battery = battery_state_service_peek();
   battery_state_service_subscribe(battery_handler);
+  connection_service_subscribe((ConnectionHandlers) {
+    .pebble_app_connection_handler = connection_handler,
+  });
 
   app_message_register_inbox_received(inbox_received);
   app_message_open(256, 64);
@@ -473,6 +730,7 @@ static void deinit(void) {
   accel_tap_service_unsubscribe();
   backlight_service_unsubscribe();
   battery_state_service_unsubscribe();
+  connection_service_unsubscribe();
   tick_timer_service_unsubscribe();
   window_destroy(s_window);
 }
