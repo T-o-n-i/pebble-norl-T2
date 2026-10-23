@@ -10,6 +10,8 @@ Plattform: emery (Pebble Time 2).
 
 Die letzten drei Bilder zeigen die Detailanzeige an einem ausgedachten Regentag: um 4:20 Uhr nach Wahrscheinlichkeit, um 4:20 Uhr nach Menge, um 17:50 Uhr im 12-Stunden-Format.
 
+Der Regen ist seit dem 23.10.2026 auf der Uhr getestet und läuft.
+
 ## Installieren
 
 `build/norl.pbw` aufs iPhone bringen, etwa per AirDrop, und in der Pebble-App öffnen. Danach auf der Uhr unter „Watchfaces“ auswählen. Für den Regen braucht die Pebble-App Zugriff auf den Standort.
