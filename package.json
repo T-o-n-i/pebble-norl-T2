@@ -38,6 +38,7 @@
       "RAIN_MIN_PERCENT",
       "RAIN_MIN_TENTHS",
       "RAIN",
+      "METER_MODE",
       "RAIN_READY",
       "RAIN_REQUEST",
       "RAIN_START",

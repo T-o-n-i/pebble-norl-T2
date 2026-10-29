@@ -2,6 +2,7 @@
 #include "glyphs.h"
 
 // Norl für die Pebble Time 2: große Stundenziffer, darunter eine Skala für die Minuten.
+// Wahlweise füllt sich statt der Skala der ganze Hintergrund im Lauf der Stunde.
 // Schütteln oder Antippen (erkannt am Einschalten des Lichts) zeigt für ein paar Sekunden
 // Uhrzeit und Datum in groß, dazwischen die Sekunden oder den Regen der nächsten 12 Stunden.
 // Den Regen holt das Handy stündlich bei Open-Meteo.
@@ -52,6 +53,11 @@ typedef enum {
   RAIN_AMOUNT = 2,       // Höhe des Balkens = Regenmenge
 } RainMode;
 
+typedef enum {
+  METER_BAR = 0,   // Minuten als Balken in der Skala unten
+  METER_FILL = 1,  // der ganze Hintergrund füllt sich von links nach rechts
+} MeterMode;
+
 typedef struct {
   GColor background;
   GColor digits;   // Stundenziffer und Uhrzeit in der Detailanzeige
@@ -66,7 +72,16 @@ typedef struct {
   uint8_t rain_min_percent;   // Balken erst ab dieser Wahrscheinlichkeit
   uint8_t rain_min_tenths;    // Balken erst ab dieser Menge in 0,1 mm/h
   GColor rain;
+  uint8_t meter_mode;         // MeterMode
 } Settings;
+
+// Farben der Normalansicht. Im gefüllten Teil des Hintergrunds ist die Skalenfarbe der
+// Hintergrund, Ziffer und Striche stehen dort in der Hintergrundfarbe.
+typedef struct {
+  GColor background;
+  GColor digits;
+  GColor accent;
+} FaceColors;
 
 // Regen vom Handy, auf der Uhr gespeichert
 typedef struct {
@@ -82,6 +97,7 @@ static time_t s_rain_asked;  // letzte Anfrage ans Handy
 
 static Window *s_window;
 static Layer *s_canvas;
+static Layer *s_fill;  // gefüllter Teil des Hintergrunds bei METER_FILL
 static AppTimer *s_detail_timer;
 static AppTimer *s_light_timer;
 static bool s_detail;
@@ -112,6 +128,7 @@ static void settings_defaults(void) {
   s_settings.rain_min_percent = 30;
   s_settings.rain_min_tenths = 1;
   s_settings.rain = GColorPictonBlue;
+  s_settings.meter_mode = METER_BAR;
 }
 
 static void settings_load(void) {
@@ -155,9 +172,9 @@ static int display_hour(const struct tm *t) {
 // ---------------------------------------------------------------- Zeichnen
 
 // Minutenskala: gefüllt bis zur aktuellen Minute, Striche alle 5 Minuten
-static void draw_meter(GContext *ctx, GRect r, int minute) {
+static void draw_meter(GContext *ctx, GRect r, int minute, const FaceColors *c) {
   int16_t fill_w = r.size.w * minute / 60;
-  graphics_context_set_fill_color(ctx, s_settings.accent);
+  graphics_context_set_fill_color(ctx, c->accent);
   graphics_fill_rect(ctx, GRect(r.origin.x, r.origin.y, fill_w, r.size.h), 0, GCornerNone);
 
   for (int i = 1; i < 12; i++) {
@@ -171,13 +188,13 @@ static void draw_meter(GContext *ctx, GRect r, int minute) {
       th = r.size.h / 4;
     }
     bool inside = x + 3 <= r.origin.x + fill_w;
-    graphics_context_set_fill_color(ctx, inside ? s_settings.background : s_settings.accent);
+    graphics_context_set_fill_color(ctx, inside ? c->background : c->accent);
     graphics_fill_rect(ctx, GRect(x, r.origin.y + r.size.h - th, 3, th), 0, GCornerNone);
   }
 }
 
 // Stundenziffer so groß wie möglich in area, schmale Einsen wie im Original
-static void draw_hour(GContext *ctx, GRect area, int hour) {
+static void draw_hour(GContext *ctx, GRect area, int hour, const FaceColors *c) {
   char text[4];
   snprintf(text, sizeof(text), "%d", hour);
   int n = strlen(text);
@@ -207,7 +224,7 @@ static void draw_hour(GContext *ctx, GRect area, int hour) {
 
   int16_t tw = glyph_text_width(text, &st);
   GPoint origin = GPoint(area.origin.x + (area.size.w - tw) / 2, area.origin.y);
-  glyph_draw_text(ctx, origin, text, &st, s_settings.digits, s_settings.background);
+  glyph_draw_text(ctx, origin, text, &st, c->digits, c->background);
 }
 
 static bool battery_low(void) {
@@ -378,16 +395,30 @@ static void draw_rain(GContext *ctx, GRect r, const struct tm *t) {
   }
 }
 
-static void draw_face(GContext *ctx, GRect b, const struct tm *t) {
+// filled: der gefüllte Teil des Hintergrunds bei METER_FILL, mit vertauschten Farben
+static void draw_face(GContext *ctx, GRect b, const struct tm *t, bool filled) {
+  FaceColors c = { s_settings.background, s_settings.digits, s_settings.accent };
+  if (filled) {
+    c = (FaceColors) { s_settings.accent, s_settings.background, s_settings.background };
+  }
   GRect meter = GRect(b.origin.x, b.size.h - METER_H, b.size.w, METER_H);
   GRect digit = GRect(MARGIN, MARGIN, b.size.w - 2 * MARGIN,
                       b.size.h - METER_H - METER_GAP - MARGIN);
-  draw_hour(ctx, digit, display_hour(t));
+  draw_hour(ctx, digit, display_hour(t), &c);
 
+  if (s_settings.meter_mode == METER_FILL) {
+    // Die Minuten zeigt der Hintergrund, unten bleiben nur die Striche über die volle
+    // Breite, damit sie zur Füllung passen. Das Akkufeld liegt darüber.
+    draw_meter(ctx, meter, 0, &c);
+    if (battery_low()) {
+      draw_battery(ctx, b);
+    }
+    return;
+  }
   if (battery_low()) {
     meter.size.w -= draw_battery(ctx, b) + BATTERY_GAP;
   }
-  draw_meter(ctx, meter, t->tm_min);
+  draw_meter(ctx, meter, t->tm_min, &c);
 }
 
 static void draw_centered_text(GContext *ctx, const char *text, GFont font, GRect r, GColor c) {
@@ -456,8 +487,33 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   if (s_detail) {
     draw_detail(ctx, b, t);
   } else {
-    draw_face(ctx, b, t);
+    draw_face(ctx, b, t, false);
   }
+}
+
+// Der gefüllte Teil liegt als eigene Ebene über der Normalansicht. Ihr Rahmen reicht so weit
+// wie die Füllung und schneidet alles ab, was rechts davon liegt.
+static void fill_update(Layer *layer, GContext *ctx) {
+  if (s_detail) return;
+  GRect b = layer_get_bounds(s_canvas);
+  graphics_context_set_antialiased(ctx, true);
+  graphics_context_set_fill_color(ctx, s_settings.accent);
+  graphics_fill_rect(ctx, b, 0, GCornerNone);
+  time_t now = time(NULL);
+  draw_face(ctx, b, localtime(&now), true);
+}
+
+// Rahmen der Füllung zur aktuellen Minute setzen und alles neu zeichnen
+static void redraw(void) {
+  GRect b = layer_get_bounds(s_canvas);
+  int16_t w = 0;
+  if (s_settings.meter_mode == METER_FILL && !s_detail) {
+    time_t now = time(NULL);
+    w = b.size.w * localtime(&now)->tm_min / 60;
+  }
+  layer_set_hidden(s_fill, w == 0);
+  layer_set_frame(s_fill, GRect(0, 0, w, b.size.h));
+  layer_mark_dirty(s_canvas);
 }
 
 // ---------------------------------------------------------------- Wetter vom Handy
@@ -490,7 +546,7 @@ static void rain_received(DictionaryIterator *iter) {
   s_rain.start = start->value->int32;
   s_rain.fetched = time(NULL);
   persist_write_data(RAIN_KEY, &s_rain, sizeof(s_rain));
-  layer_mark_dirty(s_canvas);
+  redraw();
 }
 
 static void connection_handler(bool connected) {
@@ -506,19 +562,19 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   if (units_changed & MINUTE_UNIT) {
     rain_request();
   }
-  layer_mark_dirty(s_canvas);
+  redraw();
 }
 
 static void battery_handler(BatteryChargeState state) {
   s_battery = state;
-  layer_mark_dirty(s_canvas);
+  redraw();
 }
 
 static void detail_hide(void *data) {
   s_detail_timer = NULL;
   s_detail = false;
   tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
-  layer_mark_dirty(s_canvas);
+  redraw();
 }
 
 static void detail_show(void) {
@@ -531,7 +587,7 @@ static void detail_show(void) {
   } else {
     s_detail_timer = app_timer_register(ms, detail_hide, NULL);
   }
-  layer_mark_dirty(s_canvas);
+  redraw();
 }
 
 static uint32_t now_ms(void) {
@@ -583,7 +639,7 @@ static void focus_will_change(bool in_focus) {
 static void tap_handler(AccelAxisType axis, int32_t direction) {
 #if RAIN_DEMO
   s_demo = (s_demo + 1) % DEMO_COUNT;
-  layer_mark_dirty(s_canvas);
+  redraw();
   return;
 #endif
   if (trigger_too_soon()) return;
@@ -659,10 +715,13 @@ static void settings_received(DictionaryIterator *iter) {
   if ((t = dict_find(iter, MESSAGE_KEY_RAIN))) {
     s_settings.rain = GColorFromHEX(t->value->int32);
   }
+  if ((t = dict_find(iter, MESSAGE_KEY_METER_MODE))) {
+    s_settings.meter_mode = tuple_uint(t);
+  }
   settings_save();
   triggers_subscribe();
   window_set_background_color(s_window, s_settings.background);
-  layer_mark_dirty(s_canvas);
+  redraw();
   rain_request();  // falls der Regen gerade eingeschaltet wurde
 }
 
@@ -688,9 +747,14 @@ static void window_load(Window *window) {
   s_canvas = layer_create(layer_get_bounds(root));
   layer_set_update_proc(s_canvas, canvas_update);
   layer_add_child(root, s_canvas);
+  s_fill = layer_create(GRectZero);
+  layer_set_update_proc(s_fill, fill_update);
+  layer_add_child(s_canvas, s_fill);
+  redraw();
 }
 
 static void window_unload(Window *window) {
+  layer_destroy(s_fill);
   layer_destroy(s_canvas);
 }
 

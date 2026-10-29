@@ -6,7 +6,7 @@ Nachbau von [Norl](https://apps.repebble.com/norl_545cbf8d8d7292ab7a000044) (Mat
 
 Plattform: emery (Pebble Time 2).
 
-![Watchface](screenshots/face.png) ![Detailanzeige](screenshots/detail.png) ![Mit eigenen Farben](screenshots/farben.png) ![Detailanzeige mit eigenen Farben](screenshots/farben-detail.png) ![Bei niedrigem Akku](screenshots/akku.png) ![Regenwahrscheinlichkeit](screenshots/regen.png) ![Regenmenge](screenshots/regen-menge.png) ![Regen im 12-Stunden-Format](screenshots/regen-12h.png)
+![Watchface](screenshots/face.png) ![Detailanzeige](screenshots/detail.png) ![Mit eigenen Farben](screenshots/farben.png) ![Detailanzeige mit eigenen Farben](screenshots/farben-detail.png) ![Bei niedrigem Akku](screenshots/akku.png) ![Minuten im ganzen Hintergrund](screenshots/hintergrund.png) ![Regenwahrscheinlichkeit](screenshots/regen.png) ![Regenmenge](screenshots/regen-menge.png) ![Regen im 12-Stunden-Format](screenshots/regen-12h.png)
 
 Die letzten drei Bilder zeigen die Detailanzeige an einem ausgedachten Regentag: um 4:20 Uhr nach Wahrscheinlichkeit, um 4:20 Uhr nach Menge, um 17:50 Uhr im 12-Stunden-Format.
 
@@ -19,6 +19,7 @@ Der Regen ist seit dem 23.10.2026 auf der Uhr getestet und läuft.
 ## Bedienung
 
 * **Normalansicht:** Die Stunde füllt den Bildschirm, die Skala unten zeigt die Minuten. Striche alle 5 Minuten, längere bei 15 und 45, der längste bei 30.
+* **Minuten im ganzen Hintergrund** (Einstellung „Minuten“): Statt der Skala füllt sich der ganze Bildschirm im Lauf der Stunde von links nach rechts in der Farbe der Skalen. Im gefüllten Teil steht die Stundenziffer in der Hintergrundfarbe. Unten bleiben die Striche alle 5 Minuten, über die volle Breite. Das Akkufeld liegt bei niedrigem Akku über den letzten Strichen, die Skala wird hier nicht kürzer.
 * **Niedriger Akku:** Wenn eingeschaltet, ab dem eingestellten Wert (Standard 20 %) wird die Skala kürzer, rechts daneben steht ein farbiges Feld mit Batteriesymbol und dem Ladezustand in Prozent. Beim Laden ist die Anzeige ausgeblendet.
 * **Detailanzeige** durch Schütteln (kurz das Handgelenk drehen) oder Antippen: Stunden und Minuten, darunter die Sekunden oder der Regen, unten Wochentag und Datum. Nach der eingestellten Zeit geht es zurück, nochmal schütteln schließt sofort.
 * **Regen in der Detailanzeige:** Ein Balken für jede der nächsten 12 Stunden, die volle Breite sind 12 Stunden. Der linke Rand ist jetzt. Darunter steht eine Skala mit einem Strich zu jeder vollen Stunde, alle 3 Stunden länger und mit der Uhrzeit (0, 3, 6 … 21 bzw. 12, 3, 6, 9). Die Balken wandern mit der Zeit nach links, etwa alle 4 Minuten um einen Pixel: Links schrumpft die laufende Stunde, rechts wächst die nächste herein. Je nach Einstellung zeigt die Höhe die Regenwahrscheinlichkeit (ganz oben = 100 %) oder die Regenmenge (1 mm pro Stunde = halbe Höhe, ab 4 mm ganz oben). Unter der Schwelle gibt es keinen Balken. Sind die Daten älter als 3 Stunden, etwa weil das Handy lange weg war, kommen wieder die Sekunden.
@@ -32,7 +33,8 @@ In der Pebble-App auf dem iPhone beim Watchface auf das Zahnrad tippen.
 |---|---|---|
 | Hintergrund | Schwarz | |
 | Ziffern | Weiß | Stundenziffer und Uhrzeit in der Detailanzeige |
-| Skalen, Sekunden und Datum | Weiß | Minutenskala, Skala unter dem Regen, Sekunden und Datum |
+| Skalen, Sekunden und Datum | Weiß | Minutenskala oder Füllung des Hintergrunds, Skala unter dem Regen, Sekunden und Datum |
+| Minuten | Skala unten | Skala unten oder ganzer Hintergrund |
 | Stunden | wie in der Uhr eingestellt | 12 oder 24 Stunden |
 | Detailanzeige öffnen | Schütteln und Antippen | Schütteln, Antippen oder beides |
 | Detailanzeige stehen lassen | 10 Sekunden | 5, 10, 15 oder 30 Sekunden |
@@ -47,6 +49,7 @@ In der Pebble-App auf dem iPhone beim Watchface auf das Zahnrad tippen.
 ## Technik
 
 * `src/c/glyphs.c` zeichnet die Ziffern. Jede besteht aus Balken mit runden Enden, angeordnet wie bei einer 7-Segment-Anzeige, die Innenecken werden ausgerundet. Die Maße stammen aus den Bildern des Originals: Strichstärke rund 18 % der Ziffernhöhe, die 1 ist nur einen Strich breit und steht dicht an der Nachbarziffer.
+* Beim ganzen Hintergrund liegt eine zweite Ebene über dem Zifferblatt, so breit wie die Füllung. Sie zeichnet dasselbe Zifferblatt mit vertauschten Farben und schneidet es an ihrem rechten Rand ab.
 * Bei zweistelligen Stunden werden die Ziffern schmaler und die Striche bei Bedarf dünner, damit die Löcher offen bleiben.
 * **Wetter:** Die Uhr fragt das Handy höchstens einmal pro Stunde nach neuem Regen, und nur wenn es verbunden ist. Kommt keine Antwort, fragt sie nach 15 Minuten wieder, beim Wiederverbinden sofort. Das Handy holt bei [Open-Meteo](https://open-meteo.com) (ohne Konto und Schlüssel) Wahrscheinlichkeit und Menge für die nächsten 24 Stunden am Standort des Handys, ohne Standort am zuletzt bekannten. Die Uhr speichert die Daten, ohne Handy zeigt sie sie noch 3 Stunden lang. Der Abruf steht in `src/pkjs/rain.js`.
 * `#define RAIN_DEMO 1` in `main.c` setzt statt echtem Wetter einen ausgedachten Tag ein. Die Detailanzeige bleibt dann stehen, Schütteln schaltet durch acht Uhrzeiten (darunter 4:00, 4:20 und 4:40, um das Wandern zu sehen), jeweils nach Wahrscheinlichkeit, nach Menge und im 12-Stunden-Format. Gedacht für Screenshots.
