@@ -8,6 +8,11 @@ module.exports = [
     "defaultValue": "Große Stundenziffer, darunter eine Skala für die Minuten. Schütteln oder Antippen zeigt die genaue Uhrzeit, das Datum und dazwischen die Sekunden oder den Regen der nächsten 12 Stunden."
   },
   {
+    "type": "text",
+    "id": "PREVIEW",
+    "defaultValue": "<span id=\"norl-preview\"><canvas id=\"norl-face\"></canvas><canvas id=\"norl-detail\"></canvas></span><span id=\"norl-preview-note\">Vorschau: 10:38 Uhr, Akku bei 15 %, ausgedachter Regen</span>"
+  },
+  {
     "type": "section",
     "items": [
       {

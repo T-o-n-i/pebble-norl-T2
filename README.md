@@ -29,6 +29,8 @@ Der Regen ist seit dem 23.10.2026 auf der Uhr getestet und läuft.
 
 In der Pebble-App auf dem iPhone beim Watchface auf das Zahnrad tippen.
 
+Oben auf der Seite zeigt eine Vorschau Zifferblatt und Detailanzeige mit den gewählten Farben und Anzeigearten, noch bevor etwas auf der Uhr gespeichert ist. Sie bleibt beim Blättern oben stehen. Gezeigt wird immer 10:38 Uhr mit Akku bei 15 % (falls die Akkuanzeige eingeschaltet ist) und ausgedachtem Regen. Die Farben sind so korrigiert wie im Farbwähler. „Wie in der Uhr eingestellt“ zeigt die Vorschau im 24-Stunden-Format.
+
 | Feld | Standard | |
 |---|---|---|
 | Hintergrund | Schwarz | |
@@ -55,6 +57,7 @@ In der Pebble-App auf dem iPhone beim Watchface auf das Zahnrad tippen.
 * `#define RAIN_DEMO 1` in `main.c` setzt statt echtem Wetter einen ausgedachten Tag ein. Die Detailanzeige bleibt dann stehen, Schütteln schaltet durch acht Uhrzeiten (darunter 4:00, 4:20 und 4:40, um das Wandern zu sehen), jeweils nach Wahrscheinlichkeit, nach Menge und im 12-Stunden-Format. Gedacht für Screenshots.
 * Das Watchface zeichnet einmal pro Minute neu. Nur solange die Detailanzeige die Sekunden zeigt, läuft es im Sekundentakt; mit Regen bleibt es beim Minutentakt.
 * Einstellungen kommen über [Clay](https://github.com/pebble-dev/clay) und werden auf der Uhr gespeichert.
+* Die Vorschau in den Einstellungen zeichnet `src/pkjs/custom-clay.js` als Nachbau von `main.c` und `glyphs.c` in einem Canvas, mit denselben Maßen. Wer dort etwas an der Zeichnung ändert, muss die Vorschau mitziehen. Schriften sind nur angenähert, weil Gothic im Browser fehlt.
 
 ## Bauen
 
@@ -65,6 +68,9 @@ pebble emu-tap --emulator emery   # Schütteln simulieren
 pebble emu-button --emulator emery click back   # Licht an, wie beim Antippen
 pebble emu-battery --emulator emery --percent 20   # niedrigen Akku simulieren
 node tools/test/rain_test.js   # Nachricht ans Handy aus einer gespeicherten Open-Meteo-Antwort
+node tools/test/config_page.js   # Einstellungsseite samt Vorschau als build/config.html
 ```
+
+`build/config.html` lässt sich nur über http öffnen, etwa mit `python3 -m http.server -d build 8765` und dann http://localhost:8765/config.html in Handygröße.
 
 Die Uhr speichert den Regen und fragt erst nach einer Stunde wieder. Wer im Emulator einen neuen Abruf sehen will: `pebble kill && pebble wipe`, dann neu installieren.
