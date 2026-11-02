@@ -39,6 +39,7 @@
       "RAIN_MIN_TENTHS",
       "RAIN",
       "METER_MODE",
+      "METER_POSITION",
       "RAIN_READY",
       "RAIN_REQUEST",
       "RAIN_START",

@@ -36,12 +36,15 @@ module.exports = function() {
   var H = 228;
   var MARGIN = 6;
   var METER_H = 30;
+  var METER_H_FLAT = 20;
   var METER_GAP = 8;
   var BATTERY_PAD = 5;
   var BATTERY_GAP = 6;
   var ICON_W = 12;
   var ICON_H = 18;
   var ICON_GAP = 4;
+  var ICON_W_FLAT = 9;
+  var ICON_H_FLAT = 14;
   var RAIN_HOURS = 12;
   var RAIN_TOP = 112;
   var RAIN_BAR_H = 46;
@@ -95,9 +98,13 @@ module.exports = function() {
     return clayConfig.getItemByMessageKey(key).get();
   }
 
-  function color(key) {
-    var hex = ('000000' + Number(value(key)).toString(16)).slice(-6).toLowerCase();
+  function cssColor(number) {
+    var hex = ('000000' + Number(number).toString(16)).slice(-6).toLowerCase();
     return '#' + (SUNLIGHT[hex] || hex);
+  }
+
+  function color(key) {
+    return cssColor(value(key));
   }
 
   // Rechteck mit abgerundeten Ecken, Radien oben links, oben rechts, unten rechts, unten links
@@ -252,13 +259,13 @@ module.exports = function() {
     drawGlyphs(ctx, ax + div(aw - tw, 2), ay, text, st, c.digits, c.background);
   }
 
-  function drawMeter(ctx, x, y, w, h, minute, c) {
+  function drawMeter(ctx, x, y, w, h, minute, c, top) {
     var fillW = div(w * minute, 60);
     fillRect(ctx, x, y, fillW, h, c.accent);
     for (var i = 1; i < 12; i++) {
       var tx = x + div(w * i, 12) - 1;
       var th = i === 6 ? div(h * 3, 4) : (i === 3 || i === 9 ? div(h, 2) : div(h, 4));
-      fillRect(ctx, tx, y + h - th, 3, th, tx + 3 <= x + fillW ? c.background : c.accent);
+      fillRect(ctx, tx, top ? y : y + h - th, 3, th, tx + 3 <= x + fillW ? c.background : c.accent);
     }
   }
 
@@ -281,25 +288,30 @@ module.exports = function() {
     fillRect(ctx, x + 4, by + 4 + inner - level, w - 8, level, c);
   }
 
-  // Akkufeld unten rechts, gibt die Breite zurück
-  function drawBattery(ctx) {
-    var font = 'bold 22px ' + FONT;
+  // Akkufeld rechts im Bereich der Skala ab y mit Höhe h, gibt die Breite zurück
+  function drawBattery(ctx, y, h, top) {
+    var flat = h < METER_H;
+    var font = 'bold ' + (flat ? 15 : 22) + 'px ' + FONT;
+    var iconW = flat ? ICON_W_FLAT : ICON_W;
+    var iconH = (flat ? ICON_H_FLAT : ICON_H) + 2;
     var numW = textWidth(ctx, '00', font);
-    var w = Math.round(BATTERY_PAD + ICON_W + ICON_GAP + numW + BATTERY_PAD);
+    var w = Math.round(BATTERY_PAD + iconW + ICON_GAP + numW + BATTERY_PAD);
     var bx = W - w;
-    var by = H - METER_H;
     ctx.fillStyle = color('BATTERY');
-    fillRound(ctx, bx, by, w, METER_H, 4, 4, 0, 0);
+    if (top) {
+      fillRound(ctx, bx, y, w, h, 0, 0, 4, 4);
+    } else {
+      fillRound(ctx, bx, y, w, h, 4, 4, 0, 0);
+    }
     var text = String(BATTERY_PERCENT);
     var tw = textWidth(ctx, text, font);
-    var x = bx + (w - (ICON_W + ICON_GAP + tw)) / 2;
-    var iconH = ICON_H + 2;
-    drawBatteryIcon(ctx, x, by + div(METER_H - iconH, 2), ICON_W, iconH, BATTERY_PERCENT,
+    var x = bx + (w - (iconW + ICON_GAP + tw)) / 2;
+    drawBatteryIcon(ctx, x, y + div(h - iconH, 2), iconW, iconH, BATTERY_PERCENT,
                     color('BACKGROUND'));
     ctx.fillStyle = color('BACKGROUND');
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
-    ctx.fillText(text, x + ICON_W + ICON_GAP, by + METER_H / 2 + 1);
+    ctx.fillText(text, x + iconW + ICON_GAP, y + h / 2 + 1);
     return w;
   }
 
@@ -309,16 +321,28 @@ module.exports = function() {
       c = { background: c.accent, digits: c.background, accent: c.background };
     }
     fillRect(ctx, 0, 0, W, H, c.background);
-    drawHour(ctx, MARGIN, MARGIN, W - 2 * MARGIN, H - METER_H - METER_GAP - MARGIN, HOUR, c);
-    var meterW = W;
+    var pos = value('METER_POSITION');
+    var top = pos !== '0';
+    var bottom = pos !== '1';
+    var mh = pos === '2' ? METER_H_FLAT : METER_H;
+    var y0 = top ? mh + METER_GAP : MARGIN;
+    var y1 = H - (bottom ? mh + METER_GAP : MARGIN);
+    drawHour(ctx, MARGIN, y0, W - 2 * MARGIN, y1 - y0, HOUR, c);
+
+    // Akkufeld unten rechts, ohne Skala unten oben rechts
+    var batteryY = bottom ? H - mh : 0;
     var battery = value('BATTERY_SHOW');
-    if (value('METER_MODE') === '1') {
-      drawMeter(ctx, 0, H - METER_H, W, METER_H, 0, c);
-      if (battery) drawBattery(ctx);
-      return;
+    var fill = value('METER_MODE') === '1';
+    var meterW = W;
+    if (battery && !fill) {
+      meterW -= drawBattery(ctx, batteryY, mh, !bottom) + BATTERY_GAP;
     }
-    if (battery) meterW -= drawBattery(ctx) + BATTERY_GAP;
-    drawMeter(ctx, 0, H - METER_H, meterW, METER_H, MINUTE, c);
+    var minute = fill ? 0 : MINUTE;
+    if (top) drawMeter(ctx, 0, 0, meterW, mh, minute, c, true);
+    if (bottom) drawMeter(ctx, 0, H - mh, meterW, mh, minute, c, false);
+    if (battery && fill) {
+      drawBattery(ctx, batteryY, mh, !bottom);
+    }
   }
 
   function isqrt(n) {
@@ -462,7 +486,8 @@ module.exports = function() {
     component.style.background = window.getComputedStyle(document.body).backgroundColor;
 
     drawPreview();
-    ['BACKGROUND', 'DIGITS', 'ACCENT', 'METER_MODE', 'HOUR_MODE', 'BATTERY_SHOW', 'BATTERY',
+    ['BACKGROUND', 'DIGITS', 'ACCENT', 'METER_MODE', 'METER_POSITION', 'HOUR_MODE',
+     'BATTERY_SHOW', 'BATTERY',
      'RAIN_MODE', 'RAIN_MIN_PERCENT', 'RAIN_MIN_TENTHS', 'RAIN'].forEach(function(key) {
       clayConfig.getItemByMessageKey(key).on('change', drawPreview);
     });

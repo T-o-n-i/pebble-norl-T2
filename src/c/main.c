@@ -17,6 +17,7 @@
 
 #define MARGIN       6   // Rand um die Stundenziffer
 #define METER_H     30   // Höhe der Minutenskala
+#define METER_H_FLAT 20  // Höhe der Skalen, wenn sie oben und unten stehen
 #define METER_GAP    8   // Abstand zwischen Ziffer und Skala
 #define TRIGGER_PAUSE_MS 1000  // Schütteln und Licht kommen oft zusammen, nur das erste zählt
 #define LIGHT_DELAY_MS     50  // nach Licht an kurz warten, ob ein Knopf ein Menü öffnet
@@ -25,6 +26,8 @@
 #define ICON_W      12   // Batteriesymbol ohne Pol
 #define ICON_H      18
 #define ICON_GAP     4   // Abstand zwischen Symbol und Zahl
+#define ICON_W_FLAT  9   // kleineres Symbol im Akkufeld bei flachen Skalen
+#define ICON_H_FLAT 14
 #define RAIN_HOURS  12   // die volle Breite sind 12 Stunden, der linke Rand ist jetzt
 #define RAIN_TOP   112   // Oberkante der Regenbalken in der Detailanzeige
 #define RAIN_BAR_H  46   // Höhe der Balken bei 100 % oder voller Menge
@@ -54,9 +57,15 @@ typedef enum {
 } RainMode;
 
 typedef enum {
-  METER_BAR = 0,   // Minuten als Balken in der Skala unten
+  METER_BAR = 0,   // Minuten als Balken in der Skala am Rand
   METER_FILL = 1,  // der ganze Hintergrund füllt sich von links nach rechts
 } MeterMode;
+
+typedef enum {
+  METER_BOTTOM = 0,
+  METER_TOP = 1,   // wie unten, aber gespiegelt
+  METER_BOTH = 2,  // oben und unten, dafür flacher, die Ziffer steht in der Mitte
+} MeterPosition;
 
 typedef struct {
   GColor background;
@@ -73,6 +82,7 @@ typedef struct {
   uint8_t rain_min_tenths;    // Balken erst ab dieser Menge in 0,1 mm/h
   GColor rain;
   uint8_t meter_mode;         // MeterMode
+  uint8_t meter_position;     // MeterPosition
 } Settings;
 
 // Farben der Normalansicht. Im gefüllten Teil des Hintergrunds ist die Skalenfarbe der
@@ -129,6 +139,7 @@ static void settings_defaults(void) {
   s_settings.rain_min_tenths = 1;
   s_settings.rain = GColorPictonBlue;
   s_settings.meter_mode = METER_BAR;
+  s_settings.meter_position = METER_BOTTOM;
 }
 
 static void settings_load(void) {
@@ -171,8 +182,9 @@ static int display_hour(const struct tm *t) {
 
 // ---------------------------------------------------------------- Zeichnen
 
-// Minutenskala: gefüllt bis zur aktuellen Minute, Striche alle 5 Minuten
-static void draw_meter(GContext *ctx, GRect r, int minute, const FaceColors *c) {
+// Minutenskala: gefüllt bis zur aktuellen Minute, Striche alle 5 Minuten.
+// top: Skala am oberen Rand, die Striche hängen von oben herab.
+static void draw_meter(GContext *ctx, GRect r, int minute, const FaceColors *c, bool top) {
   int16_t fill_w = r.size.w * minute / 60;
   graphics_context_set_fill_color(ctx, c->accent);
   graphics_fill_rect(ctx, GRect(r.origin.x, r.origin.y, fill_w, r.size.h), 0, GCornerNone);
@@ -189,7 +201,8 @@ static void draw_meter(GContext *ctx, GRect r, int minute, const FaceColors *c) 
     }
     bool inside = x + 3 <= r.origin.x + fill_w;
     graphics_context_set_fill_color(ctx, inside ? c->background : c->accent);
-    graphics_fill_rect(ctx, GRect(x, r.origin.y + r.size.h - th, 3, th), 0, GCornerNone);
+    int16_t y = top ? r.origin.y : r.origin.y + r.size.h - th;
+    graphics_fill_rect(ctx, GRect(x, y, 3, th), 0, GCornerNone);
   }
 }
 
@@ -247,18 +260,24 @@ static void draw_battery_icon(GContext *ctx, GRect r, int percent, GColor c) {
                                 body.size.w - 8, level), 0, GCornerNone);
 }
 
-// Akkufeld unten rechts: Symbol und Zahl in Hintergrundfarbe auf farbigem Feld.
+// Akkufeld rechts im Bereich der Skala meter: Symbol und Zahl in Hintergrundfarbe auf
+// farbigem Feld, zur Mitte hin abgerundet. Bei flacher Skala kleiner.
 // Gibt die Breite des Felds zurück.
-static int16_t draw_battery(GContext *ctx, GRect b) {
-  GFont font = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
+static int16_t draw_battery(GContext *ctx, GRect meter, bool top) {
+  bool flat = meter.size.h < METER_H;
+  GFont font = fonts_get_system_font(flat ? FONT_KEY_GOTHIC_18_BOLD : FONT_KEY_GOTHIC_28_BOLD);
+  int16_t icon_w = flat ? ICON_W_FLAT : ICON_W;
+  int16_t icon_h = (flat ? ICON_H_FLAT : ICON_H) + 2;
+  int16_t text_y = flat ? -2 : -3;  // Gothic hat oben Luft über den Ziffern
   // Platz für zwei Ziffern reservieren, damit die Skala nicht springt
   int16_t num_w = graphics_text_layout_get_content_size("00", font, GRect(0, 0, 100, 40),
                                                         GTextOverflowModeWordWrap,
                                                         GTextAlignmentLeft).w;
-  int16_t w = BATTERY_PAD + ICON_W + ICON_GAP + num_w + BATTERY_PAD;
-  GRect box = GRect(b.size.w - w, b.size.h - METER_H, w, METER_H);
+  int16_t w = BATTERY_PAD + icon_w + ICON_GAP + num_w + BATTERY_PAD;
+  int16_t h = meter.size.h;
+  GRect box = GRect(meter.origin.x + meter.size.w - w, meter.origin.y, w, h);
   graphics_context_set_fill_color(ctx, s_settings.battery);
-  graphics_fill_rect(ctx, box, 4, GCornerTopLeft | GCornerTopRight);
+  graphics_fill_rect(ctx, box, 4, top ? GCornersBottom : GCornersTop);
 
   char text[4];
   snprintf(text, sizeof(text), "%d", s_battery.charge_percent);
@@ -266,12 +285,11 @@ static int16_t draw_battery(GContext *ctx, GRect b) {
                                                      GTextOverflowModeWordWrap,
                                                      GTextAlignmentLeft).w;
   // Symbol und Zahl gemeinsam mittig im Feld
-  int16_t x = box.origin.x + (w - (ICON_W + ICON_GAP + tw)) / 2;
-  int16_t icon_h = ICON_H + 2;
-  draw_battery_icon(ctx, GRect(x, box.origin.y + (METER_H - icon_h) / 2, ICON_W, icon_h),
+  int16_t x = box.origin.x + (w - (icon_w + ICON_GAP + tw)) / 2;
+  draw_battery_icon(ctx, GRect(x, box.origin.y + (h - icon_h) / 2, icon_w, icon_h),
                     s_battery.charge_percent, s_settings.background);
   graphics_context_set_text_color(ctx, s_settings.background);
-  graphics_draw_text(ctx, text, font, GRect(x + ICON_W + ICON_GAP, box.origin.y - 3, tw + 4, METER_H + 3),
+  graphics_draw_text(ctx, text, font, GRect(x + icon_w + ICON_GAP, box.origin.y + text_y, tw + 4, h - text_y),
                      GTextOverflowModeFill, GTextAlignmentLeft, NULL);
   return w;
 }
@@ -401,24 +419,40 @@ static void draw_face(GContext *ctx, GRect b, const struct tm *t, bool filled) {
   if (filled) {
     c = (FaceColors) { s_settings.accent, s_settings.background, s_settings.background };
   }
-  GRect meter = GRect(b.origin.x, b.size.h - METER_H, b.size.w, METER_H);
-  GRect digit = GRect(MARGIN, MARGIN, b.size.w - 2 * MARGIN,
-                      b.size.h - METER_H - METER_GAP - MARGIN);
-  draw_hour(ctx, digit, display_hour(t), &c);
+  uint8_t pos = s_settings.meter_position;
+  bool top = pos != METER_BOTTOM;
+  bool bottom = pos != METER_TOP;
+  int16_t mh = pos == METER_BOTH ? METER_H_FLAT : METER_H;
 
-  if (s_settings.meter_mode == METER_FILL) {
-    // Die Minuten zeigt der Hintergrund, unten bleiben nur die Striche über die volle
-    // Breite, damit sie zur Füllung passen. Das Akkufeld liegt darüber.
-    draw_meter(ctx, meter, 0, &c);
-    if (battery_low()) {
-      draw_battery(ctx, b);
-    }
-    return;
+  // Die Ziffer füllt den Platz zwischen den Skalen, ohne Skala bleibt nur der Rand
+  int16_t y0 = top ? mh + METER_GAP : MARGIN;
+  int16_t y1 = b.size.h - (bottom ? mh + METER_GAP : MARGIN);
+  draw_hour(ctx, GRect(MARGIN, y0, b.size.w - 2 * MARGIN, y1 - y0), display_hour(t), &c);
+
+  GRect upper = GRect(b.origin.x, 0, b.size.w, mh);
+  GRect lower = GRect(b.origin.x, b.size.h - mh, b.size.w, mh);
+  // Das Akkufeld steht unten rechts, ohne Skala unten oben rechts
+  GRect battery = bottom ? lower : upper;
+  bool fill = s_settings.meter_mode == METER_FILL;
+
+  if (battery_low() && !fill) {
+    // Beide Skalen gleich kürzen, damit sie oben und unten gleich weit gefüllt sind
+    int16_t w = draw_battery(ctx, battery, !bottom) + BATTERY_GAP;
+    upper.size.w -= w;
+    lower.size.w -= w;
   }
-  if (battery_low()) {
-    meter.size.w -= draw_battery(ctx, b) + BATTERY_GAP;
+  // Beim ganzen Hintergrund zeigt der die Minuten, die Skalen nur noch die Striche über die
+  // volle Breite, damit sie zur Füllung passen. Das Akkufeld liegt dann darüber.
+  int minute = fill ? 0 : t->tm_min;
+  if (top) {
+    draw_meter(ctx, upper, minute, &c, true);
   }
-  draw_meter(ctx, meter, t->tm_min, &c);
+  if (bottom) {
+    draw_meter(ctx, lower, minute, &c, false);
+  }
+  if (battery_low() && fill) {
+    draw_battery(ctx, battery, !bottom);
+  }
 }
 
 static void draw_centered_text(GContext *ctx, const char *text, GFont font, GRect r, GColor c) {
@@ -717,6 +751,9 @@ static void settings_received(DictionaryIterator *iter) {
   }
   if ((t = dict_find(iter, MESSAGE_KEY_METER_MODE))) {
     s_settings.meter_mode = tuple_uint(t);
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_METER_POSITION))) {
+    s_settings.meter_position = tuple_uint(t);
   }
   settings_save();
   triggers_subscribe();

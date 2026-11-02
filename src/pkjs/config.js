@@ -50,11 +50,23 @@ module.exports = [
         "type": "select",
         "messageKey": "METER_MODE",
         "label": "Minuten",
-        "description": "Beim ganzen Hintergrund füllt sich der Bildschirm im Lauf der Stunde von links nach rechts in der Farbe der Skalen. Im gefüllten Teil steht die Stundenziffer in der Hintergrundfarbe, unten bleiben die Striche alle 5 Minuten.",
+        "description": "Beim ganzen Hintergrund füllt sich der Bildschirm im Lauf der Stunde von links nach rechts in der Farbe der Skalen. Im gefüllten Teil steht die Stundenziffer in der Hintergrundfarbe, von den Skalen bleiben nur die Striche alle 5 Minuten.",
         "defaultValue": "0",
         "options": [
-          { "label": "Skala unten", "value": "0" },
+          { "label": "Skala am Rand", "value": "0" },
           { "label": "Ganzer Hintergrund", "value": "1" }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "METER_POSITION",
+        "label": "Skala",
+        "description": "Oben und unten sind die Skalen flacher, die Stundenziffer steht dann in der Mitte.",
+        "defaultValue": "0",
+        "options": [
+          { "label": "Unten", "value": "0" },
+          { "label": "Oben", "value": "1" },
+          { "label": "Oben und unten", "value": "2" }
         ]
       },
       {

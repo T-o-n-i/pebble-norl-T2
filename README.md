@@ -6,7 +6,7 @@ Nachbau von [Norl](https://apps.repebble.com/norl_545cbf8d8d7292ab7a000044) (Mat
 
 Plattform: emery (Pebble Time 2).
 
-![Watchface](screenshots/face.png) ![Detailanzeige](screenshots/detail.png) ![Mit eigenen Farben](screenshots/farben.png) ![Detailanzeige mit eigenen Farben](screenshots/farben-detail.png) ![Bei niedrigem Akku](screenshots/akku.png) ![Minuten im ganzen Hintergrund](screenshots/hintergrund.png) ![Regenwahrscheinlichkeit](screenshots/regen.png) ![Regenmenge](screenshots/regen-menge.png) ![Regen im 12-Stunden-Format](screenshots/regen-12h.png)
+![Watchface](screenshots/face.png) ![Detailanzeige](screenshots/detail.png) ![Mit eigenen Farben](screenshots/farben.png) ![Detailanzeige mit eigenen Farben](screenshots/farben-detail.png) ![Bei niedrigem Akku](screenshots/akku.png) ![Minuten im ganzen Hintergrund](screenshots/hintergrund.png) ![Skala oben und unten](screenshots/skala-oben-unten.png) ![Regenwahrscheinlichkeit](screenshots/regen.png) ![Regenmenge](screenshots/regen-menge.png) ![Regen im 12-Stunden-Format](screenshots/regen-12h.png)
 
 Die letzten drei Bilder zeigen die Detailanzeige an einem ausgedachten Regentag: um 4:20 Uhr nach Wahrscheinlichkeit, um 4:20 Uhr nach Menge, um 17:50 Uhr im 12-Stunden-Format.
 
@@ -18,8 +18,9 @@ Der Regen ist seit dem 23.10.2026 auf der Uhr getestet und läuft.
 
 ## Bedienung
 
-* **Normalansicht:** Die Stunde füllt den Bildschirm, die Skala unten zeigt die Minuten. Striche alle 5 Minuten, längere bei 15 und 45, der längste bei 30.
-* **Minuten im ganzen Hintergrund** (Einstellung „Minuten“): Statt der Skala füllt sich der ganze Bildschirm im Lauf der Stunde von links nach rechts in der Farbe der Skalen. Im gefüllten Teil steht die Stundenziffer in der Hintergrundfarbe. Unten bleiben die Striche alle 5 Minuten, über die volle Breite. Das Akkufeld liegt bei niedrigem Akku über den letzten Strichen, die Skala wird hier nicht kürzer.
+* **Normalansicht:** Die Stunde füllt den Bildschirm, die Skala am Rand zeigt die Minuten (unten, oben oder an beiden Rändern). Striche alle 5 Minuten, längere bei 15 und 45, der längste bei 30.
+* **Lage der Skala** (Einstellung „Skala“): unten, oben (gespiegelt, die Striche hängen von oben herab) oder oben und unten. Oben und unten sind beide Skalen flacher (20 statt 30 Pixel), die Stundenziffer steht dann in der Mitte. Bei niedrigem Akku steht das Akkufeld unten rechts, nur mit der Skala oben steht es oben rechts. Beide Skalen werden dann gleich gekürzt, damit sie gleich weit gefüllt sind. Bei flachen Skalen ist das Akkufeld kleiner.
+* **Minuten im ganzen Hintergrund** (Einstellung „Minuten“): Statt der Skala füllt sich der ganze Bildschirm im Lauf der Stunde von links nach rechts in der Farbe der Skalen. Im gefüllten Teil steht die Stundenziffer in der Hintergrundfarbe. Von den Skalen bleiben die Striche alle 5 Minuten, über die volle Breite. Das Akkufeld liegt bei niedrigem Akku über den letzten Strichen, die Skala wird hier nicht kürzer.
 * **Niedriger Akku:** Wenn eingeschaltet, ab dem eingestellten Wert (Standard 20 %) wird die Skala kürzer, rechts daneben steht ein farbiges Feld mit Batteriesymbol und dem Ladezustand in Prozent. Beim Laden ist die Anzeige ausgeblendet.
 * **Detailanzeige** durch Schütteln (kurz das Handgelenk drehen) oder Antippen: Stunden und Minuten, darunter die Sekunden oder der Regen, unten Wochentag und Datum. Nach der eingestellten Zeit geht es zurück, nochmal schütteln schließt sofort.
 * **Regen in der Detailanzeige:** Ein Balken für jede der nächsten 12 Stunden, die volle Breite sind 12 Stunden. Der linke Rand ist jetzt. Darunter steht eine Skala mit einem Strich zu jeder vollen Stunde, alle 3 Stunden länger und mit der Uhrzeit (0, 3, 6 … 21 bzw. 12, 3, 6, 9). Die Balken wandern mit der Zeit nach links, etwa alle 4 Minuten um einen Pixel: Links schrumpft die laufende Stunde, rechts wächst die nächste herein. Je nach Einstellung zeigt die Höhe die Regenwahrscheinlichkeit (ganz oben = 100 %) oder die Regenmenge (1 mm pro Stunde = halbe Höhe, ab 4 mm ganz oben). Unter der Schwelle gibt es keinen Balken. Sind die Daten älter als 3 Stunden, etwa weil das Handy lange weg war, kommen wieder die Sekunden.
@@ -36,7 +37,8 @@ Oben auf der Seite zeigt eine Vorschau Zifferblatt und Detailanzeige mit den gew
 | Hintergrund | Schwarz | |
 | Ziffern | Weiß | Stundenziffer und Uhrzeit in der Detailanzeige |
 | Skalen, Sekunden und Datum | Weiß | Minutenskala oder Füllung des Hintergrunds, Skala unter dem Regen, Sekunden und Datum |
-| Minuten | Skala unten | Skala unten oder ganzer Hintergrund |
+| Minuten | Skala am Rand | Skala am Rand oder ganzer Hintergrund |
+| Skala | Unten | unten, oben oder oben und unten |
 | Stunden | wie in der Uhr eingestellt | 12 oder 24 Stunden |
 | Detailanzeige öffnen | Schütteln und Antippen | Schütteln, Antippen oder beides |
 | Detailanzeige stehen lassen | 10 Sekunden | 5, 10, 15 oder 30 Sekunden |
