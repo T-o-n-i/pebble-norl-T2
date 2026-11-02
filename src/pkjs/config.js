@@ -44,6 +44,30 @@ module.exports = [
     "items": [
       {
         "type": "heading",
+        "defaultValue": "Farbschemata"
+      },
+      {
+        "type": "text",
+        "defaultValue": "Ein Schema enthält alle fünf Farben, auch die von Akkufeld und Regenbalken. Antippen übernimmt es. Neue und gelöschte Schemata bleiben erst nach „Speichern“ erhalten."
+      },
+      {
+        "type": "text",
+        "id": "PRESETS",
+        "defaultValue": "<span id=\"norl-presets\"></span>"
+      },
+      {
+        "type": "input",
+        "messageKey": "COLOR_PRESETS",
+        "label": "Farbschemata",
+        "defaultValue": "[]"
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
         "defaultValue": "Anzeige"
       },
       {

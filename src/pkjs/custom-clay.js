@@ -493,11 +493,154 @@ module.exports = function() {
     });
   }
 
+  // ---------------------------------------------------------------- Farbschemata
+
+  // Ein Schema hat einen Namen und alle fünf Farben. Die Liste steht als JSON im versteckten
+  // Feld COLOR_PRESETS. Clay hebt sie mit den übrigen Einstellungen auf dem Handy auf,
+  // index.js schickt sie nicht an die Uhr.
+  var COLOR_KEYS = ['BACKGROUND', 'DIGITS', 'ACCENT', 'BATTERY', 'RAIN'];
+  var STANDARD = {
+    name: 'Standard',
+    colors: { BACKGROUND: 0x000000, DIGITS: 0xFFFFFF, ACCENT: 0xFFFFFF, BATTERY: 0xFFFFFF,
+              RAIN: 0x55AAFF }
+  };
+
+  function loadPresets() {
+    try {
+      var list = JSON.parse(value('COLOR_PRESETS'));
+      return Array.isArray(list) ? list : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function storePresets(list) {
+    clayConfig.getItemByMessageKey('COLOR_PRESETS').set(JSON.stringify(list));
+    renderPresets();
+  }
+
+  function currentColors() {
+    var colors = {};
+    COLOR_KEYS.forEach(function(key) {
+      colors[key] = Number(value(key));
+    });
+    return colors;
+  }
+
+  function sameColors(a, b) {
+    return COLOR_KEYS.every(function(key) {
+      return Number(a[key]) === Number(b[key]);
+    });
+  }
+
+  function applyPreset(preset) {
+    COLOR_KEYS.forEach(function(key) {
+      if (preset.colors[key] !== undefined) {
+        clayConfig.getItemByMessageKey(key).set(preset.colors[key]);
+      }
+    });
+  }
+
+  function element(tag, css, text) {
+    var e = document.createElement(tag);
+    e.style.cssText = css;
+    if (text) e.textContent = text;
+    return e;
+  }
+
+  // Clay gestaltet Knöpfe breit und in Großbuchstaben, deshalb alles selbst festlegen
+  var BUTTON_CSS = 'flex: none; width: auto; height: auto; min-width: 0; min-height: 0;' +
+                   'margin: 0; text-transform: none; font: inherit; font-size: 14px; color: inherit;' +
+                   'background: rgba(255, 255, 255, 0.12); border: 0; border-radius: 6px;' +
+                   'padding: 6px 10px;';
+
+  // Liste der Schemata, das passende zu den eingestellten Farben ist markiert.
+  // Darunter ein Feld für den Namen und der Knopf zum Sichern der aktuellen Farben.
+  function renderPresets() {
+    var box = document.getElementById('norl-presets');
+    var name = document.getElementById('norl-preset-name');
+    var typed = name ? name.value : '';
+    box.style.display = 'block';
+    box.innerHTML = '';
+    var current = currentColors();
+    var list = loadPresets();
+
+    [STANDARD].concat(list).forEach(function(preset, i) {
+      var active = sameColors(preset.colors, current);
+      var row = element('div', 'display: flex; align-items: center; gap: 10px;' +
+                               'padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);' +
+                               'cursor: pointer;');
+      var swatches = element('span', 'display: flex; gap: 3px; flex: none;');
+      COLOR_KEYS.forEach(function(key) {
+        swatches.appendChild(element('span', 'width: 18px; height: 18px; border-radius: 4px;' +
+          'box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3); background: ' +
+          cssColor(preset.colors[key]) + ';'));
+      });
+      row.appendChild(swatches);
+      row.appendChild(element('span', 'flex: 1; overflow: hidden; text-overflow: ellipsis;' +
+                                      'white-space: nowrap;' + (active ? 'font-weight: bold;' : ''),
+                              (active ? '✓ ' : '') + preset.name));
+      row.addEventListener('click', function() {
+        applyPreset(preset);
+      });
+      if (i > 0) {
+        var remove = element('button', BUTTON_CSS, 'Löschen');
+        remove.type = 'button';
+        remove.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          list.splice(i - 1, 1);
+          storePresets(list);
+        });
+        row.appendChild(remove);
+      }
+      box.appendChild(row);
+    });
+
+    var form = element('div', 'display: flex; gap: 8px; padding-top: 12px;');
+    name = element('input', 'flex: 1; min-width: 0; width: auto; height: auto; margin: 0;' +
+                            'font: inherit; font-size: 14px; color: inherit;' +
+                            'background: rgba(255, 255, 255, 0.08); border: 0;' +
+                            'border-radius: 6px; padding: 6px 10px;');
+    name.id = 'norl-preset-name';
+    name.placeholder = 'Name';
+    name.value = typed;
+    var save = element('button', BUTTON_CSS, 'Farben sichern');
+    save.type = 'button';
+    // Gleicher Name überschreibt das alte Schema
+    save.addEventListener('click', function() {
+      var title = name.value.trim() || 'Schema ' + (list.length + 1);
+      var preset = { name: title, colors: currentColors() };
+      var at = -1;
+      list.forEach(function(p, k) {
+        if (p.name === title) at = k;
+      });
+      if (at >= 0) {
+        list[at] = preset;
+      } else {
+        list.push(preset);
+      }
+      name.value = '';
+      storePresets(list);
+    });
+    form.appendChild(name);
+    form.appendChild(save);
+    box.appendChild(form);
+  }
+
+  function setupPresets() {
+    clayConfig.getItemByMessageKey('COLOR_PRESETS').hide();
+    renderPresets();
+    COLOR_KEYS.forEach(function(key) {
+      clayConfig.getItemByMessageKey(key).on('change', renderPresets);
+    });
+  }
+
   clayConfig.on(clayConfig.EVENTS.AFTER_BUILD, function() {
     updateBattery();
     clayConfig.getItemByMessageKey('BATTERY_SHOW').on('change', updateBattery);
     updateRain();
     clayConfig.getItemByMessageKey('RAIN_MODE').on('change', updateRain);
     setupPreview();
+    setupPresets();
   });
 };

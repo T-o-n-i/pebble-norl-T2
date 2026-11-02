@@ -50,6 +50,8 @@ Oben auf der Seite zeigt eine Vorschau Zifferblatt und Detailanzeige mit den gew
 | Balken ab | 0,1 mm pro Stunde | bei Menge: 0,1, 0,2, 0,5 oder 1 mm pro Stunde |
 | Farbe der Balken | Hellblau | |
 
+**Farbschemata:** Unter den Farben steht eine Liste mit Schemata. Jedes enthält alle fünf Farben (Hintergrund, Ziffern, Skalen, Akkufeld, Regenbalken), daneben kleine Farbfelder. Antippen übernimmt ein Schema, das zu den eingestellten Farben passende ist mit ✓ markiert. „Farben sichern“ legt die aktuellen Farben unter dem eingegebenen Namen ab, ein vorhandener Name wird überschrieben. „Standard“ (Schwarz und Weiß, Regen hellblau) ist immer da und lässt sich nicht löschen. Neue und gelöschte Schemata bleiben erst nach „Speichern“ erhalten, sie liegen auf dem Handy und gehen nicht an die Uhr.
+
 ## Technik
 
 * `src/c/glyphs.c` zeichnet die Ziffern. Jede besteht aus Balken mit runden Enden, angeordnet wie bei einer 7-Segment-Anzeige, die Innenecken werden ausgerundet. Die Maße stammen aus den Bildern des Originals: Strichstärke rund 18 % der Ziffernhöhe, die 1 ist nur einen Strich breit und steht dicht an der Nachbarziffer.
@@ -59,6 +61,7 @@ Oben auf der Seite zeigt eine Vorschau Zifferblatt und Detailanzeige mit den gew
 * `#define RAIN_DEMO 1` in `main.c` setzt statt echtem Wetter einen ausgedachten Tag ein. Die Detailanzeige bleibt dann stehen, Schütteln schaltet durch acht Uhrzeiten (darunter 4:00, 4:20 und 4:40, um das Wandern zu sehen), jeweils nach Wahrscheinlichkeit, nach Menge und im 12-Stunden-Format. Gedacht für Screenshots.
 * Das Watchface zeichnet einmal pro Minute neu. Nur solange die Detailanzeige die Sekunden zeigt, läuft es im Sekundentakt; mit Regen bleibt es beim Minutentakt.
 * Einstellungen kommen über [Clay](https://github.com/pebble-dev/clay) und werden auf der Uhr gespeichert.
+* Die Farbschemata stehen als JSON in einem versteckten Clay-Feld `COLOR_PRESETS`. Clay speichert es mit den übrigen Einstellungen im `localStorage` der Pebble-App und füllt es beim nächsten Öffnen wieder ein. Damit es nicht an die Uhr geht, wertet `src/pkjs/index.js` das Schließen der Einstellungsseite selbst aus (`autoHandleEvents: false`) und nimmt das Feld vorher heraus. Es steht deshalb auch nicht in den `messageKeys`.
 * Die Vorschau in den Einstellungen zeichnet `src/pkjs/custom-clay.js` als Nachbau von `main.c` und `glyphs.c` in einem Canvas, mit denselben Maßen. Wer dort etwas an der Zeichnung ändert, muss die Vorschau mitziehen. Schriften sind nur angenähert, weil Gothic im Browser fehlt.
 
 ## Bauen

@@ -3,7 +3,9 @@ var clayConfig = require('./config');
 var customClay = require('./custom-clay');
 var rain = require('./rain');
 
-var clay = new Clay(clayConfig, customClay);
+// Einstellungsseite selbst öffnen und auswerten: Die Farbschemata (COLOR_PRESETS) bleiben in
+// den Clay-Einstellungen auf dem Handy und gehen nicht an die Uhr.
+var clay = new Clay(clayConfig, customClay, { autoHandleEvents: false });
 
 function log(text) {
   console.log('norl: ' + text);
@@ -55,6 +57,17 @@ function requestRain() {
     }
   }, { enableHighAccuracy: false, maximumAge: 30 * 60 * 1000, timeout: 30000 });
 }
+
+Pebble.addEventListener('showConfiguration', function() {
+  Pebble.openURL(clay.generateUrl());
+});
+
+Pebble.addEventListener('webviewclosed', function(e) {
+  if (!e || !e.response) return;
+  var settings = clay.getSettings(e.response, false);
+  delete settings.COLOR_PRESETS;
+  send(Clay.prepareSettingsForAppMessage(settings));
+});
 
 // Ob neues Wetter nötig ist, entscheidet die Uhr. Sie fragt höchstens einmal pro Stunde.
 Pebble.addEventListener('ready', function() {
