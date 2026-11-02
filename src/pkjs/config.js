@@ -5,7 +5,12 @@ module.exports = [
   },
   {
     "type": "text",
-    "defaultValue": "Große Stundenziffer, darunter eine Skala für die Minuten. Schütteln oder Antippen zeigt die genaue Uhrzeit mit Sekunden und das Datum."
+    "defaultValue": "Große Stundenziffer, darunter eine Skala für die Minuten. Schütteln oder Antippen zeigt die genaue Uhrzeit, das Datum und dazwischen die Sekunden oder den Regen der nächsten 12 Stunden."
+  },
+  {
+    "type": "text",
+    "id": "PREVIEW",
+    "defaultValue": "<span id=\"norl-preview\"><canvas id=\"norl-face\"></canvas><canvas id=\"norl-detail\"></canvas></span><span id=\"norl-preview-note\">Vorschau: 10:38 Uhr, Akku bei 15 %, ausgedachter Regen</span>"
   },
   {
     "type": "section",
@@ -30,7 +35,31 @@ module.exports = [
         "type": "color",
         "messageKey": "ACCENT",
         "defaultValue": "0xFFFFFF",
-        "label": "Minutenskala, Sekunden und Datum"
+        "label": "Skalen, Sekunden und Datum"
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Farbschemata"
+      },
+      {
+        "type": "text",
+        "defaultValue": "Ein Schema enthält alle fünf Farben, auch die von Akkufeld und Regenbalken. Antippen übernimmt es. Neue und gelöschte Schemata bleiben erst nach „Speichern“ erhalten."
+      },
+      {
+        "type": "text",
+        "id": "PRESETS",
+        "defaultValue": "<span id=\"norl-presets\"></span>"
+      },
+      {
+        "type": "input",
+        "messageKey": "COLOR_PRESETS",
+        "label": "Farbschemata",
+        "defaultValue": "[]"
       }
     ]
   },
@@ -40,6 +69,29 @@ module.exports = [
       {
         "type": "heading",
         "defaultValue": "Anzeige"
+      },
+      {
+        "type": "select",
+        "messageKey": "METER_MODE",
+        "label": "Minuten",
+        "description": "Beim ganzen Hintergrund füllt sich der Bildschirm im Lauf der Stunde von links nach rechts in der Farbe der Skalen. Im gefüllten Teil steht die Stundenziffer in der Hintergrundfarbe, von den Skalen bleiben nur die Striche alle 5 Minuten.",
+        "defaultValue": "0",
+        "options": [
+          { "label": "Skala am Rand", "value": "0" },
+          { "label": "Ganzer Hintergrund", "value": "1" }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "METER_POSITION",
+        "label": "Skala",
+        "description": "Oben und unten sind die Skalen flacher, die Stundenziffer steht dann in der Mitte.",
+        "defaultValue": "0",
+        "options": [
+          { "label": "Unten", "value": "0" },
+          { "label": "Oben", "value": "1" },
+          { "label": "Oben und unten", "value": "2" }
+        ]
       },
       {
         "type": "select",
@@ -113,6 +165,62 @@ module.exports = [
         "defaultValue": "0xFFFFFF",
         "label": "Farbe des Felds",
         "description": "Symbol und Zahl stehen in der Hintergrundfarbe."
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Regen"
+      },
+      {
+        "type": "select",
+        "messageKey": "RAIN_MODE",
+        "label": "In der Detailanzeige",
+        "description": "Statt der Sekunden ein Balken für jede der nächsten 12 Stunden. Der linke Rand ist jetzt, darunter eine Skala mit den vollen Stunden, alle 3 Stunden mit Uhrzeit. Das Wetter kommt stündlich von Open-Meteo für den Standort des Handys. Fehlt es seit mehr als 3 Stunden, kommen wieder die Sekunden.",
+        "defaultValue": "1",
+        "options": [
+          { "label": "Sekunden", "value": "0" },
+          { "label": "Regenwahrscheinlichkeit", "value": "1" },
+          { "label": "Regenmenge", "value": "2" }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "RAIN_MIN_PERCENT",
+        "label": "Balken ab",
+        "description": "Ganz oben ist 100 %.",
+        "defaultValue": "30",
+        "options": [
+          { "label": "10 %", "value": "10" },
+          { "label": "20 %", "value": "20" },
+          { "label": "30 %", "value": "30" },
+          { "label": "40 %", "value": "40" },
+          { "label": "50 %", "value": "50" },
+          { "label": "60 %", "value": "60" },
+          { "label": "70 %", "value": "70" }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "RAIN_MIN_TENTHS",
+        "label": "Balken ab",
+        "description": "Bei 1 mm pro Stunde reicht der Balken bis zur halben Höhe, ab 4 mm ganz nach oben.",
+        "defaultValue": "1",
+        "options": [
+          { "label": "0,1 mm pro Stunde", "value": "1" },
+          { "label": "0,2 mm pro Stunde", "value": "2" },
+          { "label": "0,5 mm pro Stunde", "value": "5" },
+          { "label": "1 mm pro Stunde", "value": "10" }
+        ]
+      },
+      {
+        "type": "color",
+        "messageKey": "RAIN",
+        "defaultValue": "0x55AAFF",
+        "label": "Farbe der Balken"
       }
     ]
   },

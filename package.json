@@ -21,7 +21,8 @@
       "watchface": true
     },
     "capabilities": [
-      "configurable"
+      "configurable",
+      "location"
     ],
     "messageKeys": [
       "BACKGROUND",
@@ -32,7 +33,18 @@
       "BATTERY_THRESHOLD",
       "BATTERY",
       "BATTERY_SHOW",
-      "DETAIL_TRIGGER"
+      "DETAIL_TRIGGER",
+      "RAIN_MODE",
+      "RAIN_MIN_PERCENT",
+      "RAIN_MIN_TENTHS",
+      "RAIN",
+      "METER_MODE",
+      "METER_POSITION",
+      "RAIN_READY",
+      "RAIN_REQUEST",
+      "RAIN_START",
+      "RAIN_PERCENT",
+      "RAIN_TENTHS"
     ],
     "resources": {
       "media": [
